@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, Package, AlertTriangle, Save, X } from 'lucide-react';
 import { stockService, productsService, storesService } from '../../services/api';
 import { Stock, Produit, Magasin } from '../../types';
+import { safeNumber, parseNumberInput, formatNumber } from '../../utils/numbers';
 import toast from 'react-hot-toast';
 
 export const StockManagementPage: React.FC = () => {
@@ -23,29 +24,71 @@ export const StockManagementPage: React.FC = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    console.log('📊 État des stocks mis à jour:', {
+      stocksCount: stocks.length,
+      produitsCount: produits.length,
+      magasinsCount: magasins.length,
+      stocks: stocks.map(s => ({ 
+        id: s.id, 
+        produit_id: s.produit_id, 
+        magasin_id: s.magasin_id,
+        quantite: s.quantite 
+      }))
+    });
+  }, [stocks, produits, magasins]);
+
   const fetchData = async () => {
     try {
-      // Récupérer les stocks
-      const stocksData = await stockService.getStocks();
-      setStocks(stocksData.map((item: any) => ({
-        ...item,
-        updatedAt: new Date(item.updated_at)
-      })));
+      console.log('🔄 Début fetchData');
+      setLoading(true);
+      
+      // Récupérer les données en parallèle
+      const [stocksData, produitsData, magasinsData] = await Promise.all([
+        stockService.getStocks(),
+        productsService.getProducts(),
+        storesService.getStores()
+      ]);
 
-      // Récupérer les produits
-      const produitsData = await productsService.getProducts();
-      setProduits(produitsData.map((item: any) => ({
+      console.log("📦 STOCKS RAW ===>", stocksData);
+      console.log("🏷️ PRODUITS RAW ===>", produitsData);
+      console.log("🏪 MAGASINS RAW ===>", magasinsData);
+      
+      // Traiter les stocks
+      const processedStocks = stocksData.map((item: any) => ({
         ...item,
-        createdAt: new Date(item.created_at)
-      })));
+        quantite: safeNumber(item.quantite, 0),
+        updatedAt: new Date(item.updated_at || new Date())
+      }));
+      
+      console.log("📦 STOCKS PROCESSED ===>", processedStocks);
+      setStocks(processedStocks);
 
-      // Récupérer les magasins
-      const magasinsData = await storesService.getStores();
-      setMagasins(magasinsData.map((item: any) => ({
+      // Traiter les produits
+      const processedProduits = produitsData.map((item: any) => ({
         ...item,
-        createdAt: new Date(item.created_at)
-      })));
+        prix_unitaire: safeNumber(item.prix_unitaire, 0),
+        seuil_alerte: safeNumber(item.seuil_alerte, 0),
+        createdAt: new Date(item.created_at || new Date())
+      }));
+      
+      console.log("🏷️ PRODUITS PROCESSED ===>", processedProduits);
+      setProduits(processedProduits);
+
+      // Traiter les magasins
+      const processedMagasins = magasinsData.map((item: any) => ({
+        ...item,
+        latitude: safeNumber(item.latitude, 0),
+        longitude: safeNumber(item.longitude, 0),
+        createdAt: new Date(item.created_at || new Date())
+      }));
+      
+      console.log("🏪 MAGASINS PROCESSED ===>", processedMagasins);
+      setMagasins(processedMagasins);
+      
+      console.log('✅ fetchData terminé');
     } catch (error) {
+      console.error('❌ Erreur fetchData:', error);
       toast.error('Erreur lors du chargement des données');
     } finally {
       setLoading(false);
@@ -54,36 +97,76 @@ export const StockManagementPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.produit || !formData.magasin) {
+      toast.error('Veuillez sélectionner un produit et un magasin');
+      return;
+    }
+
     setLoading(true);
 
     try {
+      const produitId = parseInt(formData.produit);
+      const magasinId = parseInt(formData.magasin);
+
       const stockData = {
-        produit: formData.produit,
-        magasin: formData.magasin,
-        quantite: formData.quantite
+        produit: produitId,
+        magasin: magasinId,
+        quantite: safeNumber(formData.quantite, 0)
       };
 
+      console.log('📤 Données à envoyer:', stockData);
+
       if (editingStock) {
-        await stockService.updateStock(editingStock.id, stockData);
+        // Modification d'un stock existant
+        const updatedStock = await stockService.updateStock(editingStock.id, stockData);
+        console.log('✏️ Stock modifié:', updatedStock);
+        
+        // Mettre à jour le stock dans l'état local
+        setStocks(prevStocks => prevStocks.map(stock => 
+          stock.id === editingStock.id 
+            ? { ...updatedStock, quantite: safeNumber(updatedStock.quantite, 0), updatedAt: new Date(updatedStock.updated_at || new Date()) }
+            : stock
+        ));
+        
         toast.success('Stock modifié avec succès');
       } else {
-        // Vérifier si le stock existe déjà pour ce produit et magasin
-        const existingStock = stocks.find(s => 
-          s.produit_id === formData.produit && s.magasin_id === formData.magasin
-        );
-        
+        // Vérifier si le stock existe déjà
+        const existingStock = stocks.find(s => {
+          const sProduitId = parseInt(s.produit_id.toString());
+          const sMagasinId = parseInt(s.magasin_id.toString());
+          return sProduitId === produitId && sMagasinId === magasinId;
+        });
+
         if (existingStock) {
           toast.error('Un stock existe déjà pour ce produit dans ce magasin');
           return;
         }
 
-        await stockService.createStock(stockData);
+        // Créer le nouveau stock
+        const newStock = await stockService.createStock(stockData);
+        console.log('✅ Nouveau stock créé:', newStock);
+        
+        // Ajouter le nouveau stock à l'état local
+        const processedNewStock = {
+          ...newStock,
+          quantite: safeNumber(newStock.quantite, 0),
+          updatedAt: new Date(newStock.updated_at || new Date())
+        };
+        
+        setStocks(prevStocks => {
+          const updatedStocks = [...prevStocks, processedNewStock];
+          console.log('📊 Stocks après ajout:', updatedStocks);
+          return updatedStocks;
+        });
+        
         toast.success('Stock ajouté avec succès');
       }
 
       resetForm();
-      fetchData();
+      
     } catch (error) {
+      console.error('❌ Erreur handleSubmit:', error);
       toast.error('Erreur lors de la sauvegarde');
     } finally {
       setLoading(false);
@@ -93,9 +176,9 @@ export const StockManagementPage: React.FC = () => {
   const handleEdit = (stock: Stock) => {
     setEditingStock(stock);
     setFormData({
-      produit: stock.produit_id,
-      magasin: stock.magasin_id,
-      quantite: stock.quantite
+      produit: stock.produit_id.toString(),
+      magasin: stock.magasin_id.toString(),
+      quantite: safeNumber(stock.quantite, 0)
     });
     setShowModal(true);
   };
@@ -105,9 +188,13 @@ export const StockManagementPage: React.FC = () => {
 
     try {
       await stockService.deleteStock(stock.id);
+      
+      // Supprimer le stock de l'état local
+      setStocks(prevStocks => prevStocks.filter(s => s.id !== stock.id));
+      
       toast.success('Stock supprimé avec succès');
-      fetchData();
     } catch (error) {
+      console.error('❌ Erreur lors de la suppression:', error);
       toast.error('Erreur lors de la suppression');
     }
   };
@@ -122,20 +209,43 @@ export const StockManagementPage: React.FC = () => {
     setShowModal(false);
   };
 
+  const handleQuantiteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseNumberInput(e.target.value);
+    setFormData({ ...formData, quantite: value });
+  };
+
   const getStockWithDetails = () => {
+    console.log('🔍 Mapping des stocks avec détails...');
+    
     return stocks.map(stock => {
-      const produit = produits.find(p => p.id === stock.produit_id);
-      const magasin = magasins.find(m => m.id === stock.magasin_id);
+      // Convertir tous les IDs en string pour la comparaison
+      const stockProduitId = stock.produit_id.toString();
+      const stockMagasinId = stock.magasin_id.toString();
+      
+      const produit = produits.find(p => p.id.toString() === stockProduitId);
+      const magasin = magasins.find(m => m.id.toString() === stockMagasinId);
+      
+      console.log('🔍 Stock mapping:', {
+        stockId: stock.id,
+        stockProduitId,
+        stockMagasinId,
+        produitFound: !!produit,
+        magasinFound: !!magasin,
+        produitName: produit?.nom,
+        magasinName: magasin?.nom
+      });
+      
       return { stock, produit, magasin };
     }).filter(item => item.produit && item.magasin);
   };
 
-  const filteredStocks = getStockWithDetails().filter(({ produit, magasin }) => {
+  const filteredStocks = getStockWithDetails().filter(({ produit, magasin, stock }) => {
     const matchesSearch = produit && (
       produit.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
       produit.reference.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    const matchesMagasin = !selectedMagasin || magasin?.id === selectedMagasin;
+    const matchesMagasin = !selectedMagasin || magasin?.id.toString() === selectedMagasin;
+    
     return matchesSearch && matchesMagasin;
   });
 
@@ -222,7 +332,7 @@ export const StockManagementPage: React.FC = () => {
               {filteredStocks.map(({ stock, produit, magasin }) => {
                 if (!produit || !magasin) return null;
                 
-                const isLowStock = stock.quantite <= produit.seuil_alerte;
+                const isLowStock = safeNumber(stock.quantite, 0) <= safeNumber(produit.seuil_alerte, 0);
                 
                 return (
                   <tr key={stock.id} className="hover:bg-gray-50">
@@ -252,7 +362,7 @@ export const StockManagementPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`text-lg font-bold ${isLowStock ? 'text-red-600' : 'text-green-600'}`}>
-                        {stock.quantite}
+                        {formatNumber(safeNumber(stock.quantite, 0))}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -370,9 +480,10 @@ export const StockManagementPage: React.FC = () => {
                     type="number"
                     min="0"
                     required
-                    value={formData.quantite}
-                    onChange={(e) => setFormData({ ...formData, quantite: parseInt(e.target.value) })}
+                    value={formData.quantite === 0 ? '' : formData.quantite}
+                    onChange={handleQuantiteChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0"
                   />
                 </div>
 

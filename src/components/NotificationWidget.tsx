@@ -33,11 +33,14 @@ export const NotificationWidget: React.FC = () => {
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') return;
@@ -69,19 +72,19 @@ export const NotificationWidget: React.FC = () => {
           .slice(0, 20);
 
         recentMovements.forEach((mouvement: any) => {
-          const produit = normalizedProduits.find((p: any) => p.id === mouvement.product);
-          const magasin = normalizedMagasins.find((m: any) => m.id === mouvement.store);
-          const userMouvement = normalizedUsers.find((u: any) => u.id === mouvement.user);
+          const produit = normalizedProduits.find((p: any) => p.id === mouvement.produit_id);
+          const magasin = normalizedMagasins.find((m: any) => m.id === mouvement.magasin_id);
+          const userMouvement = normalizedUsers.find((u: any) => u.id === mouvement.user_id);
 
           if (produit && magasin && userMouvement) {
             newNotifications.push({
               id: mouvement.id.toString(),
               type: 'stock_movement',
-              title: `Mouvement de stock - ${produit.name}`,
-              message: `${mouvement.movement_type === 'in' ? 'Entrée' : 'Sortie'} de ${mouvement.quantity} unités dans ${magasin.name} (${mouvement.reason})`,
+              title: `Mouvement de stock - ${produit.nom}`,
+              message: `${mouvement.type === 'entrée' ? 'Entrée' : 'Sortie'} de ${mouvement.quantite} unités dans ${magasin.nom} (${mouvement.motif})`,
               timestamp: mouvement.date,
               read: false,
-              user_name: `${userMouvement.first_name} ${userMouvement.last_name}`
+              user_name: `${userMouvement.prenom} ${userMouvement.nom}`
             });
           }
         });
@@ -125,7 +128,7 @@ export const NotificationWidget: React.FC = () => {
       {/* Bell Icon */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+        className="relative p-2 text-gray-400 hover:text-gray-600 transition-all duration-200 hover:bg-gray-100 rounded-lg"
       >
         <Bell className="h-6 w-6" />
         {unreadCount > 0 && (

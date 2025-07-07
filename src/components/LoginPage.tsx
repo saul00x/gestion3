@@ -148,15 +148,6 @@ export const LoginPage: React.FC = () => {
               )}
             </button>
           </form>
-
-          {/* Informations de test */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Comptes de test :</h3>
-            <div className="text-xs text-gray-600 space-y-1">
-              <p><strong>Admin :</strong> admin@stockpro.com / admin123</p>
-              <p><strong>Employé :</strong> employe@stockpro.com / employe123</p>
-            </div>
-          </div>
         </div>
 
         {/* Note pour les développeurs */}

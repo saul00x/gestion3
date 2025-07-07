@@ -17,15 +17,26 @@ export const authService = {
   getCurrentUser: () => apiRequest(endpoints.currentUser),
   
   getUsers: async () => {
-    const response = await apiRequest(endpoints.users);
-    return normalizeApiResponse(response);
+    try {
+      console.log('Récupération des utilisateurs...');
+      const response = await apiRequest(endpoints.users);
+      console.log('Utilisateurs API response:', response);
+      return normalizeApiResponse(response);
+    } catch (error) {
+      console.error('Erreur lors de la récupération des utilisateurs:', error);
+      throw error;
+    }
   },
   
   createUser: (userData: any) => {
     // Créer FormData pour l'upload
     const formData = new FormData();
     
+    // Générer un username basé sur l'email si pas fourni
+    const username = userData.username || userData.email.split('@')[0];
+    
     // Ajouter les champs requis
+    formData.append('username', username); // CHAMP OBLIGATOIRE
     formData.append('email', userData.email);
     formData.append('nom', userData.nom);
     formData.append('prenom', userData.prenom);
@@ -42,6 +53,15 @@ export const authService = {
       formData.append('image', userData.image);
     }
     
+    console.log('Création utilisateur avec données:', {
+      username,
+      email: userData.email,
+      nom: userData.nom,
+      prenom: userData.prenom,
+      role: userData.role,
+      magasin: userData.magasin
+    });
+    
     return fetch(`http://localhost:8000/api/auth/users/`, {
       method: 'POST',
       headers: {
@@ -51,7 +71,8 @@ export const authService = {
     }).then(async response => {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || `Erreur HTTP: ${response.status}`);
+        console.error('Erreur détaillée création utilisateur:', errorData);
+        throw new Error(JSON.stringify(errorData));
       }
       return response.json();
     });
@@ -67,8 +88,10 @@ export const authService = {
     if (userData.magasin) formData.append('magasin', userData.magasin);
     if (userData.image) formData.append('image', userData.image);
     
+    console.log('Modification utilisateur avec données:', userData);
+    
     return fetch(`http://localhost:8000/api/auth/users/${id}/`, {
-      method: 'PUT',
+      method: 'PATCH', // Utiliser PATCH au lieu de PUT pour les mises à jour partielles
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
       },
@@ -76,7 +99,8 @@ export const authService = {
     }).then(async response => {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || `Erreur HTTP: ${response.status}`);
+        console.error('Erreur détaillée modification utilisateur:', errorData);
+        throw new Error(JSON.stringify(errorData));
       }
       return response.json();
     });
@@ -89,8 +113,15 @@ export const authService = {
 // Products Services
 export const productsService = {
   getProducts: async () => {
-    const response = await apiRequest(endpoints.products);
-    return normalizeApiResponse(response);
+    try {
+      console.log('Récupération des produits...');
+      const response = await apiRequest(endpoints.products);
+      console.log('Produits API response:', response);
+      return normalizeApiResponse(response);
+    } catch (error) {
+      console.error('Erreur lors de la récupération des produits:', error);
+      throw error;
+    }
   },
   
   createProduct: (productData: any) => {
@@ -164,8 +195,15 @@ export const productsService = {
 // Stores Services
 export const storesService = {
   getStores: async () => {
-    const response = await apiRequest(endpoints.stores);
-    return normalizeApiResponse(response);
+    try {
+      console.log('Récupération des magasins...');
+      const response = await apiRequest(endpoints.stores);
+      console.log('Magasins API response:', response);
+      return normalizeApiResponse(response);
+    } catch (error) {
+      console.error('Erreur lors de la récupération des magasins:', error);
+      throw error;
+    }
   },
   
   createStore: (storeData: any) => {
@@ -229,8 +267,15 @@ export const storesService = {
 // Suppliers Services
 export const suppliersService = {
   getSuppliers: async () => {
-    const response = await apiRequest(endpoints.suppliers);
-    return normalizeApiResponse(response);
+    try {
+      console.log('Récupération des fournisseurs...');
+      const response = await apiRequest(endpoints.suppliers);
+      console.log('Fournisseurs API response:', response);
+      return normalizeApiResponse(response);
+    } catch (error) {
+      console.error('Erreur lors de la récupération des fournisseurs:', error);
+      throw error;
+    }
   },
   
   createSupplier: (supplierData: any) => {
@@ -289,58 +334,178 @@ export const suppliersService = {
     apiRequest(`${endpoints.suppliers}${id}/`, { method: 'DELETE' }),
 };
 
-// Stock Services
+// Corrections pour stockService dans api.ts
+
 export const stockService = {
   getStocks: async () => {
-    const response = await apiRequest(endpoints.stocks);
-    return normalizeApiResponse(response);
+    try {
+      console.log('📥 Récupération des stocks...');
+      const response = await apiRequest(endpoints.stocks);
+      console.log('📥 Stocks API response:', response);
+    
+      const normalizedData = normalizeApiResponse(response).map((stock: any) => ({
+        ...stock,
+        id: Number(stock.id),
+        produit_id: Number(stock.product),  // Conversion critique
+        magasin_id: Number(stock.magasin),  // Conversion critique
+        quantite: Number(stock.quantity),
+        updatedAt: new Date(stock.updated_at)
+      }));
+      console.log('📥 Stocks normalisés:', normalizedData);
+      return normalizedData;
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des stocks:', error);
+      throw error;
+    }
   },
   
-  createStock: (stockData: any) =>
-    apiRequest(endpoints.stocks, {
-      method: 'POST',
-      body: JSON.stringify(stockData),
-    }),
+  createStock: async (stockData: any) => {
+    try {
+      console.log('📤 Création de stock avec données:', stockData);
+      const response = await apiRequest(endpoints.stocks, {
+        method: 'POST',
+        body: JSON.stringify(stockData),
+      });
+      console.log('✅ Stock créé:', response);
+      
+      // S'assurer que la réponse contient les bonnes données
+      if (!response.id) {
+        throw new Error('Réponse API invalide: ID manquant');
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur lors de la création du stock:', error);
+      throw error;
+    }
+  },
   
-  updateStock: (id: string, stockData: any) =>
-    apiRequest(`${endpoints.stocks}${id}/`, {
-      method: 'PUT',
-      body: JSON.stringify(stockData),
-    }),
+  updateStock: async (id: string, stockData: any) => {
+    try {
+      console.log('📝 Modification de stock avec données:', stockData);
+      const response = await apiRequest(`${endpoints.stocks}${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(stockData),
+      });
+      console.log('✅ Stock modifié:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur lors de la modification du stock:', error);
+      throw error;
+    }
+  },
   
-  deleteStock: (id: string) =>
-    apiRequest(`${endpoints.stocks}${id}/`, { method: 'DELETE' }),
+  deleteStock: async (id: string) => {
+    try {
+      console.log('🗑️ Suppression du stock:', id);
+      const response = await apiRequest(`${endpoints.stocks}${id}/`, { method: 'DELETE' });
+      console.log('✅ Stock supprimé');
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur lors de la suppression du stock:', error);
+      throw error;
+    }
+  },
   
+  // Nouvelle fonction pour récupérer un stock spécifique
+  getStock: async (id: string) => {
+    try {
+      console.log('📥 Récupération du stock:', id);
+      const response = await apiRequest(`${endpoints.stocks}${id}/`);
+      console.log('📥 Stock récupéré:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération du stock:', error);
+      throw error;
+    }
+  },
+  
+  // Fonction pour vérifier si un stock existe déjà
+  checkStockExists: async (produitId: number, magasinId: number) => {
+    try {
+      const stocks = await stockService.getStocks();
+      return stocks.find((stock: any) => 
+        parseInt(stock.produit_id.toString()) === produitId && 
+        parseInt(stock.magasin_id.toString()) === magasinId
+      );
+    } catch (error) {
+      console.error('❌ Erreur lors de la vérification du stock:', error);
+      throw error;
+    }
+  },
+  
+  // Reste des fonctions...
   getMovements: async () => {
-    const response = await apiRequest(endpoints.movements);
-    return normalizeApiResponse(response);
+    try {
+      console.log('📥 Récupération des mouvements...');
+      const response = await apiRequest(endpoints.movements);
+      console.log('📥 Mouvements API response:', response);
+      return normalizeApiResponse(response);
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des mouvements:', error);
+      throw error;
+    }
   },
   
-  createMovement: (movementData: any) =>
-    apiRequest(endpoints.movements, {
-      method: 'POST',
-      body: JSON.stringify(movementData),
-    }),
+  createMovement: async (movementData: any) => {
+    try {
+      console.log('📤 Création de mouvement avec données:', movementData);
+      const response = await apiRequest(endpoints.movements, {
+        method: 'POST',
+        body: JSON.stringify(movementData),
+      });
+      console.log('✅ Mouvement créé:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Erreur lors de la création du mouvement:', error);
+      throw error;
+    }
+  },
 };
 
 // Attendance Services
 export const attendanceService = {
   getAttendance: async () => {
-    const response = await apiRequest(endpoints.attendance);
-    return normalizeApiResponse(response);
+    try {
+      console.log('Récupération des présences...');
+      const response = await apiRequest(endpoints.attendance);
+      console.log('Présences API response:', response);
+      return normalizeApiResponse(response);
+    } catch (error) {
+      console.error('Erreur lors de la récupération des présences:', error);
+      throw error;
+    }
   },
   
-  createAttendance: (attendanceData: any) =>
-    apiRequest(endpoints.attendance, {
-      method: 'POST',
-      body: JSON.stringify(attendanceData),
-    }),
+  createAttendance: async (attendanceData: any) => {
+    try {
+      console.log('Création de présence avec données:', attendanceData);
+      const response = await apiRequest(endpoints.attendance, {
+        method: 'POST',
+        body: JSON.stringify(attendanceData),
+      });
+      console.log('Présence créée:', response);
+      return response;
+    } catch (error) {
+      console.error('Erreur lors de la création de la présence:', error);
+      throw error;
+    }
+  },
   
-  updateAttendance: (id: string, attendanceData: any) =>
-    apiRequest(`${endpoints.attendance}${id}/`, {
-      method: 'PUT',
-      body: JSON.stringify(attendanceData),
-    }),
+  updateAttendance: async (id: string, attendanceData: any) => {
+    try {
+      console.log('Modification de présence avec données:', attendanceData);
+      const response = await apiRequest(`${endpoints.attendance}${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(attendanceData),
+      });
+      console.log('Présence modifiée:', response);
+      return response;
+    } catch (error) {
+      console.error('Erreur lors de la modification de la présence:', error);
+      throw error;
+    }
+  },
   
   deleteAttendance: (id: string) =>
     apiRequest(`${endpoints.attendance}${id}/`, { method: 'DELETE' }),
@@ -349,21 +514,48 @@ export const attendanceService = {
 // Messaging Services
 export const messagingService = {
   getMessages: async () => {
-    const response = await apiRequest(endpoints.messages);
-    return normalizeApiResponse(response);
+    try {
+      console.log('Récupération des messages...');
+      const response = await apiRequest(endpoints.messages);
+      console.log('Messages API response:', response);
+      const normalizedData = normalizeApiResponse(response);
+      console.log('Messages normalisés:', normalizedData);
+      return normalizedData;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des messages:', error);
+      throw error;
+    }
   },
   
-  createMessage: (messageData: any) =>
-    apiRequest(endpoints.messages, {
-      method: 'POST',
-      body: JSON.stringify(messageData),
-    }),
+  createMessage: async (messageData: any) => {
+    try {
+      console.log('Création de message avec données:', messageData);
+      const response = await apiRequest(endpoints.messages, {
+        method: 'POST',
+        body: JSON.stringify(messageData),
+      });
+      console.log('Message créé:', response);
+      return response;
+    } catch (error) {
+      console.error('Erreur lors de la création du message:', error);
+      throw error;
+    }
+  },
   
-  updateMessage: (id: string, messageData: any) =>
-    apiRequest(`${endpoints.messages}${id}/`, {
-      method: 'PUT',
-      body: JSON.stringify(messageData),
-    }),
+  updateMessage: async (id: string, messageData: any) => {
+    try {
+      console.log('Modification de message avec données:', messageData);
+      const response = await apiRequest(`${endpoints.messages}${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(messageData),
+      });
+      console.log('Message modifié:', response);
+      return response;
+    } catch (error) {
+      console.error('Erreur lors de la modification du message:', error);
+      throw error;
+    }
+  },
   
   deleteMessage: (id: string) =>
     apiRequest(`${endpoints.messages}${id}/`, { method: 'DELETE' }),

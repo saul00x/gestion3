@@ -14,7 +14,7 @@ export const ChatBot: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      content: 'Bonjour ! Je suis votre assistant IA pour StockPro. Comment puis-je vous aider aujourd\'hui ?',
+      content: `Bonjour ${user?.prenom || 'utilisateur'} ! Je suis votre assistant IA pour StockPro. Comment puis-je vous aider aujourd'hui ?`,
       isBot: true,
       timestamp: new Date()
     }
@@ -25,31 +25,90 @@ export const ChatBot: React.FC = () => {
   const generateBotResponse = (userMessage: string): string => {
     const message = userMessage.toLowerCase();
     
+    // Réponses contextuelles selon le rôle
+    const isAdmin = user?.role === 'admin';
+    
+    if (message.includes('bonjour') || message.includes('salut') || message.includes('hello')) {
+      return `Bonjour ${user?.prenom || 'utilisateur'} ! Comment puis-je vous aider avec StockPro aujourd'hui ?`;
+    }
+
+    if (message.includes('merci')) {
+      return 'Je vous en prie ! N\'hésitez pas si vous avez d\'autres questions sur StockPro.';
+    }
+    
     if (message.includes('stock') || message.includes('inventaire')) {
-      return 'Pour gérer votre stock, vous pouvez aller dans la section "Gestion des Stocks" où vous pourrez voir les quantités disponibles, ajouter de nouveaux produits et suivre les mouvements de stock.';
+      if (isAdmin) {
+        return 'Pour gérer votre stock, vous pouvez aller dans la section "Gestion des Stocks" où vous pourrez voir les quantités disponibles, ajouter de nouveaux produits et suivre les mouvements de stock. Vous pouvez également consulter les alertes de stock bas sur le dashboard.';
+      } else {
+        return 'Vous pouvez consulter le stock de votre magasin dans la section "Stock" et enregistrer des mouvements de stock (entrées/sorties) selon vos besoins.';
+      }
     }
     
     if (message.includes('pointage') || message.includes('présence')) {
-      return 'Le système de pointage vous permet d\'enregistrer vos heures d\'arrivée et de départ. Assurez-vous d\'être dans un rayon de 100m de votre magasin pour pointer.';
+      if (isAdmin) {
+        return 'Vous pouvez consulter toutes les présences des employés dans la section "Présences". Vous y trouverez l\'historique complet des pointages avec possibilité d\'export en CSV ou PDF.';
+      } else {
+        return 'Le système de pointage vous permet d\'enregistrer vos heures d\'arrivée et de départ. Assurez-vous d\'être dans un rayon de 100m de votre magasin pour pointer. Vous pouvez gérer vos pauses également.';
+      }
     }
     
     if (message.includes('produit') || message.includes('article')) {
-      return 'Dans la section Produits, vous pouvez ajouter de nouveaux articles, modifier les informations existantes et définir des seuils d\'alerte pour le stock.';
+      if (isAdmin) {
+        return 'Dans la section Produits, vous pouvez ajouter de nouveaux articles, modifier les informations existantes, définir des seuils d\'alerte pour le stock et gérer les images des produits.';
+      } else {
+        return 'Vous pouvez consulter les produits disponibles dans votre magasin via la section Stock. Les informations incluent les prix, références et quantités disponibles.';
+      }
     }
     
     if (message.includes('magasin') || message.includes('boutique')) {
-      return 'La gestion des magasins vous permet de configurer les différents points de vente, leurs adresses et coordonnées GPS pour le système de pointage.';
+      if (isAdmin) {
+        return 'La gestion des magasins vous permet de configurer les différents points de vente, leurs adresses et coordonnées GPS pour le système de pointage. Vous pouvez aussi ajouter des images pour chaque magasin.';
+      } else {
+        return 'Votre magasin assigné détermine où vous pouvez pointer et quel stock vous pouvez consulter. Contactez votre administrateur si vous avez besoin d\'être assigné à un autre magasin.';
+      }
     }
     
     if (message.includes('utilisateur') || message.includes('employé')) {
-      return 'Les administrateurs peuvent gérer les comptes utilisateurs, assigner des rôles et des magasins aux employés dans la section Utilisateurs.';
+      if (isAdmin) {
+        return 'Les administrateurs peuvent gérer les comptes utilisateurs, assigner des rôles (admin/employé) et des magasins aux employés dans la section Utilisateurs. Vous pouvez aussi consulter leurs présences.';
+      } else {
+        return 'Pour toute question concernant votre compte utilisateur ou vos permissions, contactez votre administrateur.';
+      }
     }
-    
+
+    if (message.includes('message') || message.includes('communication')) {
+      if (isAdmin) {
+        return 'Vous pouvez communiquer avec tous les employés via le système de messagerie intégré. Cliquez sur l\'icône de message en bas à droite pour démarrer une conversation.';
+      } else {
+        return 'Vous pouvez envoyer des messages aux administrateurs via le système de messagerie. Cliquez sur l\'icône de message en bas à droite de votre écran.';
+      }
+    }
+
+    if (message.includes('dashboard') || message.includes('tableau de bord')) {
+      if (isAdmin) {
+        return 'Votre dashboard administrateur affiche les statistiques globales : nombre de produits, magasins, utilisateurs, alertes de stock et valeur totale du stock. Vous y trouvez aussi des graphiques de répartition.';
+      } else {
+        return 'Votre dashboard employé affiche les informations de votre magasin : produits en stock, alertes, et actions rapides pour le pointage et la consultation du stock.';
+      }
+    }
+
+    if (message.includes('problème') || message.includes('erreur') || message.includes('bug')) {
+      return 'Si vous rencontrez un problème technique, essayez de rafraîchir la page. Si le problème persiste, contactez votre administrateur système avec une description détaillée du problème.';
+    }
+
     if (message.includes('aide') || message.includes('help')) {
-      return 'Je peux vous aider avec : la gestion du stock, le pointage, les produits, les magasins, les utilisateurs, et les fonctionnalités générales de StockPro. Que souhaitez-vous savoir ?';
+      if (isAdmin) {
+        return 'Je peux vous aider avec : la gestion du stock, les produits, les magasins, les utilisateurs, les présences, les fournisseurs, les paramètres et les fonctionnalités générales de StockPro. Que souhaitez-vous savoir ?';
+      } else {
+        return 'Je peux vous aider avec : le pointage, la consultation du stock de votre magasin, l\'enregistrement des mouvements de stock et les fonctionnalités générales de StockPro. Que souhaitez-vous savoir ?';
+      }
+    }
+
+    if (message.includes('comment') && message.includes('utiliser')) {
+      return 'Pour utiliser StockPro efficacement, commencez par explorer votre dashboard. Chaque section a des boutons d\'action clairs. N\'hésitez pas à me poser des questions spécifiques sur une fonctionnalité !';
     }
     
-    return 'Je comprends votre question. Pour une assistance plus détaillée, n\'hésitez pas à contacter votre administrateur ou à consulter la documentation de StockPro.';
+    return 'Je comprends votre question. Pour une assistance plus détaillée, n\'hésitez pas à contacter votre administrateur ou à me poser une question plus spécifique sur les fonctionnalités de StockPro.';
   };
 
   const handleSendMessage = async () => {

@@ -10,6 +10,7 @@ export const StockPage: React.FC = () => {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [produits, setProduits] = useState<Produit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showMouvementModal, setShowMouvementModal] = useState(false);
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
@@ -20,8 +21,16 @@ export const StockPage: React.FC = () => {
   });
 
   useEffect(() => {
+    console.log('User data:', user);
+    console.log('Magasin ID:', user?.magasin_id);
+  }, [user]);
+
+  useEffect(() => {
     if (user?.magasin_id) {
       fetchStockData();
+    } else {
+      setLoading(false);
+      setError('Aucun magasin assigné à cet utilisateur');
     }
   }, [user]);
 
@@ -29,25 +38,46 @@ export const StockPage: React.FC = () => {
     if (!user?.magasin_id) return;
 
     try {
-      // Récupérer les stocks du magasin
-      const stocksData = await stockService.getStocks();
-      const userStocks = stocksData
-        .filter((stock: any) => stock.magasin.toString() === user.magasin_id)
-        .map((item: any) => ({
-          ...item,
-          updatedAt: new Date(item.updated_at)
-        })) as Stock[];
-
+      setLoading(true);
+      setError(null);
+      
       // Récupérer tous les produits
       const produitsData = await productsService.getProducts();
       const produits = produitsData.map((item: any) => ({
         ...item,
+        id: Number(item.id), // Conversion critique
         createdAt: new Date(item.created_at)
       })) as Produit[];
-
-      setStocks(userStocks);
       setProduits(produits);
-    } catch (error) {
+
+      // Récupérer les stocks
+      const stocksData = await stockService.getStocks();
+      
+      // CORRECTION : Normalisation des IDs
+      const normalizedStocks = stocksData.map((item: any) => ({
+        ...item,
+        id: Number(item.id),
+        produit_id: Number(item.product), // Conversion ici
+        magasin_id: Number(item.magasin), // Conversion ici
+        quantite: Number(item.quantity),
+        updatedAt: new Date(item.updated_at)
+      })) as Stock[];
+
+      // CORRECTION : Filtrage avec comparaison numérique
+      const userStocks = normalizedStocks.filter(stock => {
+        return stock.magasin_id === user.magasin_id;
+      });
+
+      console.log('Stocks filtrés pour ce magasin:', userStocks);
+      setStocks(userStocks);
+      
+      if (userStocks.length === 0) {
+        setError('Aucun stock trouvé pour ce magasin');
+      }
+
+    } catch (error: unknown) {
+      console.error('Erreur lors du chargement du stock:', error);
+      setError('Erreur lors du chargement du stock: ' + (error instanceof Error ? error.message : String(error)));
       toast.error('Erreur lors du chargement du stock');
     } finally {
       setLoading(false);
@@ -87,6 +117,7 @@ export const StockPage: React.FC = () => {
       resetMouvementForm();
       fetchStockData();
     } catch (error) {
+      console.error('Erreur mouvement:', error);
       toast.error('Erreur lors de l\'enregistrement du mouvement');
     }
   };
@@ -101,11 +132,20 @@ export const StockPage: React.FC = () => {
     setShowMouvementModal(false);
   };
 
-  const getStockWithProduct = () => {
-    return stocks.map(stock => {
+ const getStockWithProduct = () => {
+    const result = stocks.map(stock => {
+      // CORRECTION : Conversion numérique et gestion d'erreur
       const produit = produits.find(p => p.id === stock.produit_id);
+      
+      if (!produit) {
+        console.warn(`Produit non trouvé pour stock ID: ${stock.id}, produit ID: ${stock.produit_id}`);
+        return null;
+      }
+      
       return { stock, produit };
-    }).filter(item => item.produit);
+    }).filter(item => item !== null) as { stock: Stock; produit: Produit }[];
+    
+    return result;
   };
 
   const filteredStocks = getStockWithProduct().filter(({ produit }) =>
@@ -134,8 +174,33 @@ export const StockPage: React.FC = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <AlertTriangle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Erreur de chargement</h3>
+        <p className="text-gray-600">{error}</p>
+        <button
+          onClick={fetchStockData}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+        >
+          Réessayer
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Debug Info */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <h3 className="font-semibold text-yellow-800 mb-2">Debug Info:</h3>
+        <p className="text-sm text-yellow-700">Magasin ID: {user?.magasin_id}</p>
+        <p className="text-sm text-yellow-700">Nombre de stocks: {stocks.length}</p>
+        <p className="text-sm text-yellow-700">Nombre de produits: {produits.length}</p>
+        <p className="text-sm text-yellow-700">Stocks filtrés: {filteredStocks.length}</p>
+      </div>
+
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Stock du Magasin</h1>
@@ -156,6 +221,44 @@ export const StockPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <Package className="h-8 w-8 text-blue-600 mr-3" />
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total Stocks</p>
+              <p className="text-2xl font-bold text-gray-900">{stocks.length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <AlertTriangle className="h-8 w-8 text-red-600 mr-3" />
+            <div>
+              <p className="text-sm font-medium text-gray-600">Alertes</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {stocks.filter(stock => {
+                  const produit = produits.find(p => p.id === stock.produit_id);
+                  return produit && stock.quantite <= produit.seuil_alerte;
+                }).length}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center">
+            <Package className="h-8 w-8 text-green-600 mr-3" />
+            <div>
+              <p className="text-sm font-medium text-gray-600">Disponibles</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {stocks.filter(s => s.quantite > 0).length}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Stock Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredStocks.map(({ stock, produit }) => {
@@ -172,6 +275,10 @@ export const StockPage: React.FC = () => {
                     src={`http://localhost:8000${produit.image_url}`}
                     alt={produit.nom}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.log('Erreur chargement image:', produit.image_url);
+                      e.currentTarget.style.display = 'none';
+                    }}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
@@ -230,12 +337,22 @@ export const StockPage: React.FC = () => {
         })}
       </div>
 
-      {filteredStocks.length === 0 && (
+      {filteredStocks.length === 0 && stocks.length > 0 && (
         <div className="text-center py-12">
           <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun produit en stock</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun produit trouvé</h3>
           <p className="text-gray-600">
-            {searchTerm ? 'Aucun produit ne correspond à votre recherche.' : 'Aucun stock disponible pour ce magasin.'}
+            Aucun produit ne correspond à votre recherche.
+          </p>
+        </div>
+      )}
+
+      {stocks.length === 0 && (
+        <div className="text-center py-12">
+          <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun stock disponible</h3>
+          <p className="text-gray-600">
+            Aucun stock n'est disponible pour ce magasin.
           </p>
         </div>
       )}
@@ -357,12 +474,12 @@ export const StockPage: React.FC = () => {
                     <Save className="h-4 w-4" />
                     <span>Enregistrer</span>
                   </button>
-                </div>
-              </form>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
-};
+        )}
+      </div>
+    );
+  };
