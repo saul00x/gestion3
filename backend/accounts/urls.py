@@ -3,7 +3,8 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
 
 urlpatterns = [
-    path('login/', views.login_view, name='login'),
+    # Utiliser la vue custom pour le login
+    path('login/', views.CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('logout/', views.logout_view, name='logout'),
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('me/', views.current_user_view, name='current_user'),

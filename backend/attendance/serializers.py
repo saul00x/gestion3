@@ -2,8 +2,8 @@ from rest_framework import serializers
 from .models import Presence
 
 class PresenceSerializer(serializers.ModelSerializer):
-    user_id = serializers.ReadOnlyField()
-    magasin_id = serializers.ReadOnlyField()
+    user_id = serializers.SerializerMethodField()
+    magasin_id = serializers.SerializerMethodField()
     
     class Meta:
         model = Presence
@@ -11,6 +11,12 @@ class PresenceSerializer(serializers.ModelSerializer):
                  'date_pointage', 'heure_entree', 'heure_sortie', 'pause_entree', 
                  'pause_sortie', 'duree_pause', 'latitude', 'longitude', 'type']
         read_only_fields = ['id', 'user']
+    
+    def get_user_id(self, obj):
+        return str(obj.user.id) if obj.user else None
+    
+    def get_magasin_id(self, obj):
+        return str(obj.magasin.id) if obj.magasin else None
     
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user

@@ -19,6 +19,10 @@ export const authService = {
   getUsers: () => apiRequest(endpoints.users),
   
   createUser: (userData: any) => {
+    if (userData instanceof FormData) {
+      return apiUpload(endpoints.users, userData);
+    }
+    
     const formData = new FormData();
     Object.keys(userData).forEach(key => {
       if (userData[key] !== null && userData[key] !== undefined) {
@@ -29,6 +33,10 @@ export const authService = {
   },
   
   updateUser: (id: string, userData: any) => {
+    if (userData instanceof FormData) {
+      return apiUpload(`${endpoints.users}${id}/`, userData);
+    }
+    
     const formData = new FormData();
     Object.keys(userData).forEach(key => {
       if (userData[key] !== null && userData[key] !== undefined) {
@@ -47,6 +55,10 @@ export const productsService = {
   getProducts: () => apiRequest(endpoints.products),
   
   createProduct: (productData: any) => {
+    if (productData instanceof FormData) {
+      return apiUpload(endpoints.products, productData);
+    }
+    
     const formData = new FormData();
     Object.keys(productData).forEach(key => {
       if (productData[key] !== null && productData[key] !== undefined) {
@@ -57,6 +69,10 @@ export const productsService = {
   },
   
   updateProduct: (id: string, productData: any) => {
+    if (productData instanceof FormData) {
+      return apiUpload(`${endpoints.products}${id}/`, productData);
+    }
+    
     const formData = new FormData();
     Object.keys(productData).forEach(key => {
       if (productData[key] !== null && productData[key] !== undefined) {
@@ -75,6 +91,10 @@ export const storesService = {
   getStores: () => apiRequest(endpoints.stores),
   
   createStore: (storeData: any) => {
+    if (storeData instanceof FormData) {
+      return apiUpload(endpoints.stores, storeData);
+    }
+    
     const formData = new FormData();
     Object.keys(storeData).forEach(key => {
       if (storeData[key] !== null && storeData[key] !== undefined) {
@@ -85,13 +105,17 @@ export const storesService = {
   },
   
   updateStore: (id: string, storeData: any) => {
+    if (storeData instanceof FormData) {
+      return apiUpload(`${endpoints.stores}${id}/`, storeData);
+    }
+    
     const formData = new FormData();
     Object.keys(storeData).forEach(key => {
       if (storeData[key] !== null && storeData[key] !== undefined) {
         formData.append(key, storeData[key]);
       }
     });
-    return apiUpload(`${endpoints.stores}${id}/`, formData);
+    return apiUpload(`${endpoints.stores}${id}/`, storeData);
   },
   
   deleteStore: (id: string) =>
@@ -103,6 +127,10 @@ export const suppliersService = {
   getSuppliers: () => apiRequest(endpoints.suppliers),
   
   createSupplier: (supplierData: any) => {
+    if (supplierData instanceof FormData) {
+      return apiUpload(endpoints.suppliers, supplierData);
+    }
+    
     const formData = new FormData();
     Object.keys(supplierData).forEach(key => {
       if (supplierData[key] !== null && supplierData[key] !== undefined) {
@@ -113,13 +141,17 @@ export const suppliersService = {
   },
   
   updateSupplier: (id: string, supplierData: any) => {
+    if (supplierData instanceof FormData) {
+      return apiUpload(`${endpoints.suppliers}${id}/`, supplierData);
+    }
+    
     const formData = new FormData();
     Object.keys(supplierData).forEach(key => {
       if (supplierData[key] !== null && supplierData[key] !== undefined) {
         formData.append(key, supplierData[key]);
       }
     });
-    return apiUpload(`${endpoints.suppliers}${id}/`, formData);
+    return apiUpload(`${endpoints.suppliers}${id}/`, supplierData);
   },
   
   deleteSupplier: (id: string) =>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Package, Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { Package, Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 export const LoginPage: React.FC = () => {
@@ -27,11 +27,35 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
     setError('');
 
+    // Validation côté client
+    if (!email.trim()) {
+      setError('L\'email est requis');
+      setLoading(false);
+      return;
+    }
+
+    if (!password) {
+      setError('Le mot de passe est requis');
+      setLoading(false);
+      return;
+    }
+
+    // Validation format email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError('Format d\'email invalide');
+      setLoading(false);
+      return;
+    }
+
     try {
-      await login(email, password);
+      console.log('Tentative de connexion...');
+      await login(email.trim(), password);
+      console.log('Connexion réussie');
       // La redirection se fera automatiquement via useEffect
     } catch (error: any) {
-      setError('Email ou mot de passe incorrect');
+      console.error('Erreur de connexion:', error);
+      setError(error.message || 'Email ou mot de passe incorrect');
     } finally {
       setLoading(false);
     }
@@ -68,6 +92,7 @@ export const LoginPage: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   className="appearance-none block w-full px-3 py-2 pl-10 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
                   placeholder="votre@email.com"
+                  disabled={loading}
                 />
                 <Mail className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" />
               </div>
@@ -87,12 +112,14 @@ export const LoginPage: React.FC = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   className="appearance-none block w-full px-3 py-2 pl-10 pr-10 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
                   placeholder="Votre mot de passe"
+                  disabled={loading}
                 />
                 <Lock className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                  disabled={loading}
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
@@ -100,7 +127,8 @@ export const LoginPage: React.FC = () => {
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+              <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-center space-x-2">
+                <AlertCircle className="h-5 w-5 text-red-500" />
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
@@ -111,12 +139,24 @@ export const LoginPage: React.FC = () => {
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
               {loading ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>Connexion...</span>
+                </div>
               ) : (
                 'Se connecter'
               )}
             </button>
           </form>
+
+          {/* Informations de test */}
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Comptes de test :</h3>
+            <div className="text-xs text-gray-600 space-y-1">
+              <p><strong>Admin :</strong> admin@stockpro.com / admin123</p>
+              <p><strong>Employé :</strong> employe@stockpro.com / employe123</p>
+            </div>
+          </div>
         </div>
 
         {/* Note pour les développeurs */}

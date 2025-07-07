@@ -39,27 +39,50 @@ export const useAuth = () => {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await apiRequest(endpoints.login, {
+      // S'assurer que les données sont bien formatées
+      const loginData = {
+        email: email.trim(),
+        password: password
+      };
+
+      console.log('Tentative de connexion avec:', { email: loginData.email });
+
+      const response = await fetch(`http://localhost:8000/api/auth/login/`, {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(loginData),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Erreur de connexion:', errorData);
+        throw new Error(errorData.error || errorData.message || 'Erreur de connexion');
+      }
+
+      const data = await response.json();
+      console.log('Réponse de connexion:', data);
       
-      localStorage.setItem('access_token', response.access);
-      localStorage.setItem('refresh_token', response.refresh);
+      // Stocker les tokens
+      localStorage.setItem('access_token', data.access);
+      localStorage.setItem('refresh_token', data.refresh);
       
+      // Mettre à jour l'état utilisateur
       setUser({
-        id: response.user.id,
-        email: response.user.email,
-        nom: response.user.nom || '',
-        prenom: response.user.prenom || '',
-        role: response.user.role,
-        magasin_id: response.user.magasin_id,
-        image_url: response.user.image_url,
-        createdAt: new Date(response.user.created_at)
+        id: data.user.id,
+        email: data.user.email,
+        nom: data.user.nom || '',
+        prenom: data.user.prenom || '',
+        role: data.user.role,
+        magasin_id: data.user.magasin_id,
+        image_url: data.user.image_url,
+        createdAt: new Date(data.user.created_at)
       });
       
-      return response;
+      return data;
     } catch (error) {
+      console.error('Erreur dans login:', error);
       throw error;
     }
   };
