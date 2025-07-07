@@ -41,16 +41,7 @@ export const StockPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Récupérer tous les produits
-      const produitsData = await productsService.getProducts();
-      const produits = produitsData.map((item: any) => ({
-        ...item,
-        id: Number(item.id), // Conversion critique
-        createdAt: new Date(item.created_at)
-      })) as Produit[];
-      setProduits(produits);
-
-      // Récupérer les stocks
+      // Récupérer les stocks du magasin
       const stocksData = await stockService.getStocks();
       
       // CORRECTION : Normalisation des IDs
@@ -63,15 +54,24 @@ export const StockPage: React.FC = () => {
         updatedAt: new Date(item.updated_at)
       })) as Stock[];
 
-      // CORRECTION : Filtrage avec comparaison numérique
-      const userStocks = normalizedStocks.filter(stock => {
+      // Récupérer tous les produits
+      const produitsData = await productsService.getProducts();
+      const produits = produitsData.map((item: any) => ({
+        ...item,
+        id: Number(item.id), // Conversion critique
+        createdAt: new Date(item.created_at)
+      })) as Produit[];
+      setProduits(produits);
+
+      // Filtrage avec comparaison numérique pour le magasin de l'utilisateur
+      const filteredUserStocks = normalizedStocks.filter(stock => {
         return stock.magasin_id === user.magasin_id;
       });
 
-      console.log('Stocks filtrés pour ce magasin:', userStocks);
-      setStocks(userStocks);
+      console.log('Stocks filtrés pour ce magasin:', filteredUserStocks);
+      setStocks(filteredUserStocks);
       
-      if (userStocks.length === 0) {
+      if (filteredUserStocks.length === 0) {
         setError('Aucun stock trouvé pour ce magasin');
       }
 

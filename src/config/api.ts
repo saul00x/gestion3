@@ -29,7 +29,6 @@ export const normalizeApiResponse = (response: any): any[] => {
   }
   
   // Par défaut, retourner un tableau vide
-  console.warn('Réponse API inattendue, retour d\'un tableau vide:', response);
   return [];
 };
 
@@ -81,7 +80,6 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}) =>
       ...options,
     };
 
-    console.log(`API Request: ${options.method || 'GET'} ${url}`, defaultOptions);
     const response = await fetch(url, defaultOptions);
     
     if (response.status === 401) {
@@ -118,14 +116,12 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}) =>
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Erreur API:', errorData);
       throw new Error(errorData.error || errorData.message || errorData.detail || `Erreur HTTP: ${response.status}`);
     }
     
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       const data = await response.json();
-      console.log('API Response:', data);
       return data;
     }
     

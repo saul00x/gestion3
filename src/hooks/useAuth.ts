@@ -21,10 +21,9 @@ export const useAuth = () => {
             role: userData.role,
             magasin_id: userData.magasin_id,
             image_url: userData.image_url,
-            createdAt: new Date(userData.created_at)
+            createdAt: new Date(userData.date_joined)
           });
         } catch (error) {
-          console.error('Erreur lors de la récupération des données utilisateur:', error);
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           setUser(null);
@@ -39,13 +38,10 @@ export const useAuth = () => {
 
   const login = async (email: string, password: string) => {
     try {
-      // S'assurer que les données sont bien formatées
       const loginData = {
         email: email.trim(),
         password: password
       };
-
-      console.log('Tentative de connexion avec:', { email: loginData.email });
 
       const response = await fetch(`http://localhost:8000/api/auth/login/`, {
         method: 'POST',
@@ -57,12 +53,10 @@ export const useAuth = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('Erreur de connexion:', errorData);
         throw new Error(errorData.error || errorData.message || 'Erreur de connexion');
       }
 
       const data = await response.json();
-      console.log('Réponse de connexion:', data);
       
       // Stocker les tokens
       localStorage.setItem('access_token', data.access);
@@ -77,12 +71,11 @@ export const useAuth = () => {
         role: data.user.role,
         magasin_id: data.user.magasin_id,
         image_url: data.user.image_url,
-        createdAt: new Date(data.user.created_at)
+        createdAt: new Date(data.user.date_joined)
       });
       
       return data;
     } catch (error) {
-      console.error('Erreur dans login:', error);
       throw error;
     }
   };

@@ -39,20 +39,25 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['role'] = user.role
         token['nom'] = user.nom
         token['prenom'] = user.prenom
+        token['magasin_id'] = str(user.magasin.id) if user.magasin else None
         
         return token
 
 class UserSerializer(serializers.ModelSerializer):
     image_url = serializers.ReadOnlyField()
     magasin_id = serializers.SerializerMethodField()
+    magasin_nom = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'email', 'nom', 'prenom', 'role', 'magasin_id', 'image', 'image_url', 'date_joined']
+        fields = ['id', 'email', 'nom', 'prenom', 'role', 'magasin', 'magasin_id', 'magasin_nom', 'image', 'image_url', 'date_joined']
         read_only_fields = ['id', 'date_joined']
     
     def get_magasin_id(self, obj):
         return str(obj.magasin.id) if obj.magasin else None
+    
+    def get_magasin_nom(self, obj):
+        return obj.magasin.nom if obj.magasin else None
 
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
