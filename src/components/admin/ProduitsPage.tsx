@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, Package, AlertTriangle, Save, X } from 'lucide-react';
 import { productsService, suppliersService } from '../../services/api';
+import { normalizeApiResponse } from '../../config/api';
 import { Produit, Fournisseur } from '../../types';
 import { ImageUpload } from '../ImageUpload';
 import toast from 'react-hot-toast';
@@ -29,12 +30,17 @@ export const ProduitsPage: React.FC = () => {
 
   const fetchProduits = async () => {
     try {
+      console.log('Chargement des produits...');
       const data = await productsService.getProducts();
-      setProduits(data.map((item: any) => ({
+      console.log('Produits reçus:', data);
+      
+      const normalizedData = normalizeApiResponse(data);
+      setProduits(normalizedData.map((item: any) => ({
         ...item,
         createdAt: new Date(item.created_at)
       })));
     } catch (error) {
+      console.error('Erreur lors du chargement des produits:', error);
       toast.error('Erreur lors du chargement des produits');
     } finally {
       setLoading(false);
@@ -44,7 +50,8 @@ export const ProduitsPage: React.FC = () => {
   const fetchFournisseurs = async () => {
     try {
       const data = await suppliersService.getSuppliers();
-      setFournisseurs(data.map((item: any) => ({
+      const normalizedData = normalizeApiResponse(data);
+      setFournisseurs(normalizedData.map((item: any) => ({
         ...item,
         createdAt: new Date(item.created_at)
       })));
@@ -68,6 +75,8 @@ export const ProduitsPage: React.FC = () => {
         image: formData.image
       };
 
+      console.log('Données du produit à envoyer:', produitData);
+
       if (editingProduit) {
         await productsService.updateProduct(editingProduit.id, produitData);
         toast.success('Produit modifié avec succès');
@@ -77,9 +86,10 @@ export const ProduitsPage: React.FC = () => {
       }
 
       resetForm();
-      fetchProduits();
-    } catch (error) {
-      toast.error('Erreur lors de la sauvegarde');
+      await fetchProduits(); // Recharger la liste
+    } catch (error: any) {
+      console.error('Erreur lors de la sauvegarde:', error);
+      toast.error(error.message || 'Erreur lors de la sauvegarde');
     } finally {
       setLoading(false);
     }
@@ -105,7 +115,7 @@ export const ProduitsPage: React.FC = () => {
     try {
       await productsService.deleteProduct(produit.id);
       toast.success('Produit supprimé avec succès');
-      fetchProduits();
+      await fetchProduits(); // Recharger la liste
     } catch (error) {
       toast.error('Erreur lors de la suppression');
     }
@@ -125,11 +135,11 @@ export const ProduitsPage: React.FC = () => {
     setShowModal(false);
   };
 
-  const filteredProduits = produits.filter(produit =>
+  const filteredProduits = Array.isArray(produits) ? produits.filter(produit =>
     produit.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
     produit.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
     produit.categorie.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ) : [];
 
   if (loading && produits.length === 0) {
     return (
@@ -215,11 +225,8 @@ export const ProduitsPage: React.FC = () => {
 
               {/* Content */}
               <div className="p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-semibold text-gray-900 text-lg">{produit.nom}</h3>
-                </div>
-                
-                <p className="text-sm text-gray-600 mb-2">Réf: {produit.reference}</p>
+                <h3 className="font-semibold text-gray-900 text-lg mb-2">{produit.nom}</h3>
+                <p className="text-sm text-gray-600 mb-3">Réf: {produit.reference}</p>
                 
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">

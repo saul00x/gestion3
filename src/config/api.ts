@@ -6,17 +6,38 @@ export const apiConfig = {
   timeout: 10000,
 };
 
+// Fonction utilitaire pour normaliser les réponses API
+export const normalizeApiResponse = (response: any): any[] => {
+  // Si c'est déjà un tableau, le retourner tel quel
+  if (Array.isArray(response)) {
+    return response;
+  }
+  
+  // Si c'est une réponse paginée Django avec 'results'
+  if (response && typeof response === 'object' && Array.isArray(response.results)) {
+    return response.results;
+  }
+  
+  // Si c'est un objet avec une propriété 'data' qui est un tableau
+  if (response && typeof response === 'object' && Array.isArray(response.data)) {
+    return response.data;
+  }
+  
+  // Si c'est un objet unique, le mettre dans un tableau
+  if (response && typeof response === 'object') {
+    return [response];
+  }
+  
+  // Par défaut, retourner un tableau vide
+  console.warn('Réponse API inattendue, retour d\'un tableau vide:', response);
+  return [];
+};
+
 // Helper pour les requêtes authentifiées
 const getAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem('access_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
-
-// Helper pour les requêtes avec fichiers
-const getFormDataHeaders = () => ({
-  ...getAuthHeaders(),
-  // Ne pas définir Content-Type pour FormData, le navigateur le fera automatiquement
-});
 
 // Helper pour les requêtes JSON
 const getJsonHeaders = () => ({
@@ -60,6 +81,7 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}) =>
       ...options,
     };
 
+    console.log(`API Request: ${options.method || 'GET'} ${url}`, defaultOptions);
     const response = await fetch(url, defaultOptions);
     
     if (response.status === 401) {
@@ -96,72 +118,20 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}) =>
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || errorData.message || `Erreur HTTP: ${response.status}`);
+      console.error('Erreur API:', errorData);
+      throw new Error(errorData.error || errorData.message || errorData.detail || `Erreur HTTP: ${response.status}`);
     }
     
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return await response.json();
+      const data = await response.json();
+      console.log('API Response:', data);
+      return data;
     }
     
     return response;
   } catch (error) {
     console.error('Erreur API:', error);
-    throw error;
-  }
-};
-
-// Fonction pour les uploads de fichiers
-export const apiUpload = async (endpoint: string, formData: FormData) => {
-  const url = `${API_BASE_URL}${endpoint}`;
-  
-  const makeRequest = async (headers: Record<string, string>) => {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
-    
-    if (response.status === 401) {
-      const newToken = await refreshToken();
-      if (newToken) {
-        const newHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
-        const retryResponse = await fetch(url, {
-          method: 'POST',
-          headers: newHeaders,
-          body: formData,
-        });
-        
-        if (retryResponse.status === 401) {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          window.location.href = '/login';
-          throw new Error('Session expirée');
-        }
-        
-        return retryResponse;
-      } else {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
-        throw new Error('Session expirée');
-      }
-    }
-    
-    return response;
-  };
-
-  try {
-    const response = await makeRequest(getAuthHeaders());
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || errorData.message || `Erreur HTTP: ${response.status}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Erreur upload:', error);
     throw error;
   }
 };
