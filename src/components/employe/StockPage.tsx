@@ -32,7 +32,7 @@ export const StockPage: React.FC = () => {
       // Récupérer les stocks du magasin
       const stocksData = await stockService.getStocks();
       const userStocks = stocksData
-        .filter((stock: any) => stock.magasin.toString() === user.magasin_id)
+        .filter((stock: any) => stock.magasin_id === user.magasin_id)
         .map((item: any) => ({
           ...item,
           updatedAt: new Date(item.updated_at)

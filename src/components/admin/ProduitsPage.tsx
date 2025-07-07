@@ -30,10 +30,7 @@ export const ProduitsPage: React.FC = () => {
 
   const fetchProduits = async () => {
     try {
-      console.log('Chargement des produits...');
       const data = await productsService.getProducts();
-      console.log('Produits reçus:', data);
-      
       const normalizedData = normalizeApiResponse(data);
       setProduits(normalizedData.map((item: any) => ({
         ...item,
@@ -75,8 +72,6 @@ export const ProduitsPage: React.FC = () => {
         image: formData.image
       };
 
-      console.log('Données du produit à envoyer:', produitData);
-
       if (editingProduit) {
         await productsService.updateProduct(editingProduit.id, produitData);
         toast.success('Produit modifié avec succès');
@@ -86,7 +81,7 @@ export const ProduitsPage: React.FC = () => {
       }
 
       resetForm();
-      await fetchProduits(); // Recharger la liste
+      await fetchProduits();
     } catch (error: any) {
       console.error('Erreur lors de la sauvegarde:', error);
       toast.error(error.message || 'Erreur lors de la sauvegarde');
@@ -115,7 +110,7 @@ export const ProduitsPage: React.FC = () => {
     try {
       await productsService.deleteProduct(produit.id);
       toast.success('Produit supprimé avec succès');
-      await fetchProduits(); // Recharger la liste
+      await fetchProduits();
     } catch (error) {
       toast.error('Erreur lors de la suppression');
     }

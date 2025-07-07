@@ -5,7 +5,6 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db import transaction
-import logging
 from .models import User
 from .serializers import (
     UserSerializer, 
@@ -14,20 +13,15 @@ from .serializers import (
     LoginSerializer
 )
 
-logger = logging.getLogger(__name__)
-
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     
     def post(self, request, *args, **kwargs):
-        logger.info(f"Tentative de connexion pour: {request.data.get('email')}")
-        
         serializer = self.get_serializer(data=request.data)
         
         try:
             serializer.is_valid(raise_exception=True)
         except Exception as e:
-            logger.error(f"Erreur de validation: {str(e)}")
             return Response({
                 'error': 'Email ou mot de passe incorrect',
                 'details': str(e)
@@ -35,18 +29,15 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         
         # Récupérer l'utilisateur
         email = request.data.get('email')
-        user = User.objects.filter(email=email).first()
+        user = User.objects.select_related('magasin').filter(email=email).first()
         
         if not user:
-            logger.error(f"Utilisateur non trouvé: {email}")
             return Response({
                 'error': 'Utilisateur non trouvé'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Générer les tokens
         refresh = RefreshToken.for_user(user)
-        
-        logger.info(f"Connexion réussie pour: {email}")
         
         return Response({
             'access': str(refresh.access_token),
@@ -55,7 +46,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         })
 
 class UserListCreateView(generics.ListCreateAPIView):
-    queryset = User.objects.all().order_by('-date_joined')
+    queryset = User.objects.select_related('magasin').all().order_by('-date_joined')
     permission_classes = [permissions.IsAuthenticated]
     
     def get_serializer_class(self):
@@ -64,15 +55,12 @@ class UserListCreateView(generics.ListCreateAPIView):
         return UserSerializer
     
     def create(self, request, *args, **kwargs):
-        logger.info(f"Création d'utilisateur: {request.data.get('email')}")
-        
         try:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             
             with transaction.atomic():
                 user = serializer.save()
-                logger.info(f"Utilisateur créé avec succès: {user.email}")
                 
                 return Response(
                     UserSerializer(user).data,
@@ -80,13 +68,12 @@ class UserListCreateView(generics.ListCreateAPIView):
                 )
                 
         except Exception as e:
-            logger.error(f"Erreur lors de la création d'utilisateur: {str(e)}")
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = User.objects.all()
+    queryset = User.objects.select_related('magasin').all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
     
@@ -99,12 +86,10 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
             
             with transaction.atomic():
                 user = serializer.save()
-                logger.info(f"Utilisateur modifié avec succès: {user.email}")
                 
                 return Response(UserSerializer(user).data)
                 
         except Exception as e:
-            logger.error(f"Erreur lors de la modification d'utilisateur: {str(e)}")
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -112,7 +97,9 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def current_user_view(request):
-    serializer = UserSerializer(request.user)
+    # S'assurer que la relation magasin est chargée
+    user = User.objects.select_related('magasin').get(id=request.user.id)
+    serializer = UserSerializer(user)
     return Response(serializer.data)
 
 @api_view(['POST'])
