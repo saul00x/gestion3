@@ -90,6 +90,20 @@ export const EmployeDashboard: React.FC = () => {
     fetchData();
   }, [user]);
 
+  // Charger les paramètres depuis localStorage
+  const getGpsRadius = () => {
+    try {
+      const savedSettings = localStorage.getItem('stockpro_settings');
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        return settings.gpsRadius || 100;
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des paramètres:', error);
+    }
+    return 100; // Valeur par défaut
+  };
+
   const handlePointage = async () => {
     if (!user || !magasin) return;
 
@@ -105,8 +119,9 @@ export const EmployeDashboard: React.FC = () => {
         magasin.longitude
       );
 
-      if (distance > 100) {
-        setPointageMessage(`Vous êtes trop loin du magasin (${Math.round(distance)}m). Vous devez être dans un rayon de 100m.`);
+      const allowedRadius = getGpsRadius();
+      if (distance > allowedRadius) {
+        setPointageMessage(`Vous êtes trop loin du magasin (${Math.round(distance)}m). Vous devez être dans un rayon de ${allowedRadius}m.`);
         return;
       }
 

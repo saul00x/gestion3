@@ -6,7 +6,7 @@ import { User as UserType, Magasin } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { ImageUpload } from '../ImageUpload';
 import toast from 'react-hot-toast';
-//yes
+
 export const UtilisateursPage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserType[]>([]);
@@ -32,9 +32,7 @@ export const UtilisateursPage: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      console.log('Chargement des utilisateurs...');
       const data = await authService.getUsers();
-      console.log('Utilisateurs reçus:', data);
       const normalizedData = normalizeApiResponse(data);
       setUsers(normalizedData.map((item: any) => ({
         ...item,
@@ -50,9 +48,7 @@ export const UtilisateursPage: React.FC = () => {
 
   const fetchMagasins = async () => {
     try {
-      console.log('Chargement des magasins...');
       const data = await storesService.getStores();
-      console.log('Magasins reçus:', data);
       const normalizedData = normalizeApiResponse(data);
       setMagasins(normalizedData.map((item: any) => ({
         ...item,
@@ -63,129 +59,109 @@ export const UtilisateursPage: React.FC = () => {
     }
   };
 
-  // UtilisateursPage.tsx - Fonction handleSubmit corrigée
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-// UtilisateursPage.tsx - handleSubmit avec validation renforcée
-
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
-
-  try {
-    if (editingUser) {
-      // Modification d'un utilisateur existant
-      const updateData: any = {
-        nom: formData.nom,
-        prenom: formData.prenom,
-        role: formData.role,
-      };
-      
-      if (formData.magasin) {
-        updateData.magasin = formData.magasin;
-      }
-      
-      if (formData.image) {
-        updateData.image = formData.image;
-      }
-
-      console.log('Modification utilisateur:', updateData);
-      await authService.updateUser(editingUser.id, updateData);
-      toast.success('Utilisateur modifié avec succès');
-    } else {
-      // Création d'un nouvel utilisateur
-      console.log('=== DÉBUT VALIDATION FRONTEND ===');
-      console.log('FormData state:', formData);
-      
-      // Validation rigoureuse des champs obligatoires
-      const requiredFields = ['email', 'nom', 'prenom', 'password', 'role'];
-      const missingFields = requiredFields.filter(field => !formData[field as keyof typeof formData]);
-      
-      if (missingFields.length > 0) {
-        const errorMsg = `Champs manquants: ${missingFields.join(', ')}`;
-        console.error(errorMsg);
-        toast.error(errorMsg);
-        return;
-      }
-      
-      // Validation du format email
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        toast.error('Format d\'email invalide');
-        return;
-      }
-      
-      // Validation du mot de passe
-      if (formData.password.length < 6) {
-        toast.error('Le mot de passe doit contenir au moins 6 caractères');
-        return;
-      }
-      
-      // Préparer les données pour l'envoi
-      const userData = {
-        email: formData.email.trim(),
-        nom: formData.nom.trim(),
-        prenom: formData.prenom.trim(),
-        password: formData.password,
-        role: formData.role,
-        magasin: formData.magasin || null,
-        image: formData.image,
-      };
-
-      console.log('=== DONNÉES VALIDÉES POUR ENVOI ===');
-      console.log('userData:', userData);
-      
-      await authService.createUser(userData);
-      toast.success('Utilisateur créé avec succès');
-    }
-
-    resetForm();
-    await fetchUsers();
-    
-  } catch (error: any) {
-    console.error('=== ERREUR DANS HANDLESUBMIT ===');
-    console.error('Error object:', error);
-    console.error('Error message:', error.message);
-    
-    let errorMessage = 'Erreur lors de la sauvegarde';
-    
-    if (error.message) {
-      try {
-        const errorData = JSON.parse(error.message);
-        console.log('Erreur parsée:', errorData);
+    try {
+      if (editingUser) {
+        // Modification d'un utilisateur existant
+        const updateData: any = {
+          nom: formData.nom,
+          prenom: formData.prenom,
+          role: formData.role,
+        };
         
-        // Gestion des erreurs spécifiques
-        if (errorData.error) {
-          // Erreur du type "UserManager.create_user() missing..."
-          if (errorData.error.includes('missing') && errorData.error.includes('username')) {
-            errorMessage = 'Erreur technique: nom d\'utilisateur manquant. Veuillez réessayer.';
-          } else {
-            errorMessage = errorData.error;
-          }
-        } else if (errorData.email) {
-          errorMessage = Array.isArray(errorData.email) ? errorData.email[0] : 'Cette adresse email est déjà utilisée';
-        } else if (errorData.username) {
-          errorMessage = Array.isArray(errorData.username) ? errorData.username[0] : 'Ce nom d\'utilisateur est déjà utilisé';
-        } else if (errorData.password) {
-          errorMessage = Array.isArray(errorData.password) ? errorData.password[0] : 'Le mot de passe ne respecte pas les critères';
-        } else if (errorData.detail) {
-          errorMessage = errorData.detail;
-        } else if (errorData.non_field_errors) {
-          errorMessage = Array.isArray(errorData.non_field_errors) ? errorData.non_field_errors[0] : errorData.non_field_errors;
+        if (formData.magasin) {
+          updateData.magasin = formData.magasin;
         }
-      } catch (parseError) {
-        console.error('Erreur lors du parsing:', parseError);
-        errorMessage = error.message || 'Erreur technique inconnue';
+        
+        if (formData.image) {
+          updateData.image = formData.image;
+        }
+
+        await authService.updateUser(editingUser.id, updateData);
+        toast.success('Utilisateur modifié avec succès');
+      } else {
+        // Création d'un nouvel utilisateur
+        const requiredFields = ['email', 'nom', 'prenom', 'password', 'role'];
+        const missingFields = requiredFields.filter(field => !formData[field as keyof typeof formData]);
+        
+        if (missingFields.length > 0) {
+          const errorMsg = `Champs manquants: ${missingFields.join(', ')}`;
+          toast.error(errorMsg);
+          return;
+        }
+        
+        // Validation du format email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+          toast.error('Format d\'email invalide');
+          return;
+        }
+        
+        // Validation du mot de passe
+        if (formData.password.length < 6) {
+          toast.error('Le mot de passe doit contenir au moins 6 caractères');
+          return;
+        }
+        
+        // Préparer les données pour l'envoi
+        const userData = {
+          email: formData.email.trim(),
+          nom: formData.nom.trim(),
+          prenom: formData.prenom.trim(),
+          password: formData.password,
+          role: formData.role,
+          magasin: formData.magasin || null,
+          image: formData.image,
+        };
+        
+        await authService.createUser(userData);
+        toast.success('Utilisateur créé avec succès');
       }
+
+      resetForm();
+      await fetchUsers();
+      
+    } catch (error: any) {
+      console.error('Erreur dans handleSubmit:', error);
+      
+      let errorMessage = 'Erreur lors de la sauvegarde';
+      
+      if (error.message) {
+        try {
+          const errorData = JSON.parse(error.message);
+          
+          if (errorData.error) {
+            if (errorData.error.includes('missing') && errorData.error.includes('username')) {
+              errorMessage = 'Erreur technique: nom d\'utilisateur manquant. Veuillez réessayer.';
+            } else {
+              errorMessage = errorData.error;
+            }
+          } else if (errorData.email) {
+            errorMessage = Array.isArray(errorData.email) ? errorData.email[0] : 'Cette adresse email est déjà utilisée';
+          } else if (errorData.username) {
+            errorMessage = Array.isArray(errorData.username) ? errorData.username[0] : 'Ce nom d\'utilisateur est déjà utilisé';
+          } else if (errorData.password) {
+            errorMessage = Array.isArray(errorData.password) ? errorData.password[0] : 'Le mot de passe ne respecte pas les critères';
+          } else if (errorData.detail) {
+            errorMessage = errorData.detail;
+          } else if (errorData.non_field_errors) {
+            errorMessage = Array.isArray(errorData.non_field_errors) ? errorData.non_field_errors[0] : errorData.non_field_errors;
+          }
+        } catch (parseError) {
+          errorMessage = error.message || 'Erreur technique inconnue';
+        }
+      }
+      
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
-    
-    console.error('Message d\'erreur final:', errorMessage);
-    toast.error(errorMessage);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   const handleEdit = (user: UserType) => {
-    console.log('Édition utilisateur:', user);
     setEditingUser(user);
     setFormData({
       email: user.email,
@@ -295,7 +271,8 @@ const handleSubmit = async (e: React.FormEvent) => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredUsers.map((user) => {
-                const magasin = magasins.find(m => m.id === user.magasin_id);
+                // Correction: Rechercher le magasin par ID numérique
+                const magasin = magasins.find(m => m.id.toString() === user.magasin_id?.toString());
                 return (
                   <tr key={user.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">

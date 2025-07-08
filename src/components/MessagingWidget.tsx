@@ -53,9 +53,7 @@ export const MessagingWidget: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      console.log('Récupération des utilisateurs...');
       const usersData = await authService.getUsers();
-      console.log('Utilisateurs reçus:', usersData);
       
       const normalizedUsers = normalizeApiResponse(usersData);
       const filteredUsers = normalizedUsers
@@ -65,7 +63,6 @@ export const MessagingWidget: React.FC = () => {
           createdAt: new Date(item.date_joined || item.created_at)
         }));
 
-      console.log('Utilisateurs filtrés:', filteredUsers);
 
       if (user?.role === 'admin') {
         setUsers(filteredUsers.filter((u: any) => u.role === 'employe'));
@@ -80,26 +77,24 @@ export const MessagingWidget: React.FC = () => {
 
   const fetchMessages = async () => {
     try {
-      console.log('Récupération des messages...');
       const messagesData = await messagingService.getMessages();
-      console.log('Messages reçus:', messagesData);
       
       const normalizedMessages = normalizeApiResponse(messagesData);
       const formattedMessages = normalizedMessages.map((item: any) => ({
         ...item,
+        id: item.id.toString(),
+        sender_id: item.sender_id?.toString() || item.sender?.toString(),
+        receiver_id: item.receiver_id?.toString() || item.receiver?.toString(),
         timestamp: new Date(item.timestamp)
       })) as Message[];
 
-      console.log('Messages formatés:', formattedMessages);
       setMessages(formattedMessages);
 
       const unread = formattedMessages.filter(msg => 
-        msg.receiver_id === user?.id && !msg.read
+        msg.receiver_id === user?.id.toString() && !msg.read
       ).length;
       setUnreadCount(unread);
-      console.log('Messages non lus:', unread);
     } catch (error) {
-      console.error('Erreur lors du chargement des messages:', error);
       toast.error('Erreur lors du chargement des messages');
     }
   };
@@ -108,10 +103,6 @@ export const MessagingWidget: React.FC = () => {
     if (!newMessage.trim() || !selectedUser || !user) return;
 
     try {
-      console.log('Envoi du message:', {
-        receiver: selectedUser.id,
-        content: newMessage.trim()
-      });
 
       await messagingService.createMessage({
         receiver: selectedUser.id,
@@ -122,7 +113,6 @@ export const MessagingWidget: React.FC = () => {
       await fetchMessages(); // Recharger les messages
       toast.success('Message envoyé');
     } catch (error) {
-      console.error('Erreur lors de l\'envoi du message:', error);
       toast.error('Erreur lors de l\'envoi du message');
     }
   };
@@ -144,8 +134,8 @@ export const MessagingWidget: React.FC = () => {
     if (!selectedUser || !user) return [];
     
     return messages.filter(msg => 
-      (msg.sender_id === user.id && msg.receiver_id === selectedUser.id) ||
-      (msg.sender_id === selectedUser.id && msg.receiver_id === user.id)
+      (msg.sender_id === user.id.toString() && msg.receiver_id === selectedUser.id.toString()) ||
+      (msg.sender_id === selectedUser.id.toString() && msg.receiver_id === user.id.toString())
     ).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   };
 
@@ -153,7 +143,7 @@ export const MessagingWidget: React.FC = () => {
     setSelectedUser(selectedUser);
     
     const conversationMessages = messages.filter(msg => 
-      msg.sender_id === selectedUser.id && msg.receiver_id === user?.id && !msg.read
+      msg.sender_id === selectedUser.id.toString() && msg.receiver_id === user?.id.toString() && !msg.read
     );
     
     conversationMessages.forEach(msg => {
@@ -163,7 +153,7 @@ export const MessagingWidget: React.FC = () => {
 
   const getUserUnreadCount = (userId: string) => {
     return messages.filter(msg => 
-      msg.sender_id === userId && msg.receiver_id === user?.id && !msg.read
+      msg.sender_id === userId.toString() && msg.receiver_id === user?.id.toString() && !msg.read
     ).length;
   };
 
@@ -301,19 +291,19 @@ export const MessagingWidget: React.FC = () => {
                             <div
                               key={message.id}
                               className={`flex ${
-                                message.sender_id === user.id ? 'justify-end' : 'justify-start'
+                                message.sender_id === user.id.toString() ? 'justify-end' : 'justify-start'
                               }`}
                             >
                               <div
                                 className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
-                                  message.sender_id === user.id
+                                  message.sender_id === user.id.toString()
                                     ? 'bg-blue-600 text-white'
                                     : 'bg-gray-200 text-gray-900'
                                 }`}
                               >
                                 <p>{message.content}</p>
                                 <p className={`text-xs mt-1 ${
-                                  message.sender_id === user.id ? 'text-blue-100' : 'text-gray-500'
+                                  message.sender_id === user.id.toString() ? 'text-blue-100' : 'text-gray-500'
                                 }`}>
                                   {message.timestamp.toLocaleTimeString('fr-FR', {
                                     hour: '2-digit',

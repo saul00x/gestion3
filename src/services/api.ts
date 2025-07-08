@@ -371,23 +371,17 @@ export const suppliersService = {
 export const stockService = {
   getStocks: async () => {
     try {
-      console.log('📥 Récupération des stocks...');
       const response = await apiRequest(endpoints.stocks);
-      console.log('📥 Stocks API response:', response);
     
       const normalizedData = normalizeApiResponse(response).map((stock: any) => ({
         ...stock,
         id: Number(stock.id),
-        // 🔧 FIX: Gérer les deux formats possibles de l'API
         produit_id: Number(stock.produit_id || stock.product || stock.produit),
         magasin_id: Number(stock.magasin_id || stock.magasin || stock.store),
         quantite: Number(stock.quantite || stock.quantity),
         updatedAt: new Date(stock.updated_at || stock.updatedAt)
       }));
       
-      console.log('📥 Stocks normalisés:', normalizedData);
-      
-      // 🔧 FIX: Filtrer les stocks invalides
       const validStocks = normalizedData.filter(stock => 
         !isNaN(stock.produit_id) && 
         !isNaN(stock.magasin_id) && 
@@ -396,92 +390,89 @@ export const stockService = {
         stock.magasin_id > 0
       );
       
-      console.log('📥 Stocks valides:', validStocks);
       return validStocks;
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des stocks:', error);
       throw error;
     }
   },
   
   createStock: async (stockData: any) => {
     try {
-      console.log('📤 Création de stock avec données:', stockData);
-      
-      // 🔧 FIX: Normaliser les données avant envoi
-      const normalizedStockData = {
-        product: stockData.produit_id || stockData.product,
-        magasin: stockData.magasin_id || stockData.magasin,
-        quantity: stockData.quantite || stockData.quantity
-      };
-      
-      console.log('📤 Données normalisées pour création:', normalizedStockData);
-      
-      const response = await apiRequest(endpoints.stocks, {
-        method: 'POST',
-        body: JSON.stringify(normalizedStockData),
-      });
-      console.log('✅ Stock créé:', response);
-      
-      if (!response.id) {
-        throw new Error('Réponse API invalide: ID manquant');
+      // Vérifier si le stock existe déjà
+      const existingStocks = await stockService.getStocks();
+      const existingStock = existingStocks.find((stock: any) => 
+        Number(stock.produit_id) === Number(stockData.produit) && 
+        Number(stock.magasin_id) === Number(stockData.magasin)
+      );
+
+      if (existingStock) {
+        // Mettre à jour le stock existant en ajoutant la quantité
+        const newQuantity = Number(existingStock.quantite) + Number(stockData.quantite);
+        return await stockService.updateStock(existingStock.id, {
+          produit_id: stockData.produit,
+          magasin_id: stockData.magasin,
+          quantite: newQuantity
+        });
+      } else {
+        // Créer un nouveau stock
+        const normalizedStockData = {
+          produit: stockData.produit,
+          magasin: stockData.magasin,
+          quantite: stockData.quantite
+        };
+        
+        const response = await apiRequest(endpoints.stocks, {
+          method: 'POST',
+          body: JSON.stringify(normalizedStockData),
+        });
+        
+        if (!response.id) {
+          throw new Error('Réponse API invalide: ID manquant');
+        }
+        
+        return response;
       }
-      
-      return response;
     } catch (error) {
-      console.error('❌ Erreur lors de la création du stock:', error);
       throw error;
     }
   },
   
   updateStock: async (id: string, stockData: any) => {
     try {
-      console.log('📝 Modification de stock avec données:', stockData);
-      
-      // 🔧 FIX: Normaliser les données avant envoi
       const normalizedStockData = {
-        product: stockData.produit_id || stockData.product,
-        magasin: stockData.magasin_id || stockData.magasin,
-        quantity: stockData.quantite || stockData.quantity
+        produit: stockData.produit,
+        magasin: stockData.magasin,
+        quantite: stockData.quantite
       };
       
       const response = await apiRequest(`${endpoints.stocks}${id}/`, {
         method: 'PATCH',
         body: JSON.stringify(normalizedStockData),
       });
-      console.log('✅ Stock modifié:', response);
       return response;
     } catch (error) {
-      console.error('❌ Erreur lors de la modification du stock:', error);
       throw error;
     }
   },
   
   deleteStock: async (id: string) => {
     try {
-      console.log('🗑️ Suppression du stock:', id);
       const response = await apiRequest(`${endpoints.stocks}${id}/`, { method: 'DELETE' });
-      console.log('✅ Stock supprimé');
       return response;
     } catch (error) {
-      console.error('❌ Erreur lors de la suppression du stock:', error);
       throw error;
     }
   },
   
   getStock: async (id: string) => {
     try {
-      console.log('📥 Récupération du stock:', id);
       const response = await apiRequest(`${endpoints.stocks}${id}/`);
-      console.log('📥 Stock récupéré:', response);
       return response;
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération du stock:', error);
       throw error;
     }
   },
   
-  // 🔧 FIX: Améliorer la fonction de vérification
   checkStockExists: async (produitId: number, magasinId: number) => {
     try {
       const stocks = await stockService.getStocks();
@@ -490,34 +481,27 @@ export const stockService = {
         Number(stock.magasin_id) === Number(magasinId)
       );
     } catch (error) {
-      console.error('❌ Erreur lors de la vérification du stock:', error);
       throw error;
     }
   },
   
   getMovements: async () => {
     try {
-      console.log('📥 Récupération des mouvements...');
       const response = await apiRequest(endpoints.movements);
-      console.log('📥 Mouvements API response:', response);
       return normalizeApiResponse(response);
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des mouvements:', error);
       throw error;
     }
   },
   
   createMovement: async (movementData: any) => {
     try {
-      console.log('📤 Création de mouvement avec données:', movementData);
       const response = await apiRequest(endpoints.movements, {
         method: 'POST',
         body: JSON.stringify(movementData),
       });
-      console.log('✅ Mouvement créé:', response);
       return response;
     } catch (error) {
-      console.error('❌ Erreur lors de la création du mouvement:', error);
       throw error;
     }
   },
@@ -574,44 +558,34 @@ export const attendanceService = {
 export const messagingService = {
   getMessages: async () => {
     try {
-      console.log('Récupération des messages...');
       const response = await apiRequest(endpoints.messages);
-      console.log('Messages API response:', response);
       const normalizedData = normalizeApiResponse(response);
-      console.log('Messages normalisés:', normalizedData);
       return normalizedData;
     } catch (error) {
-      console.error('Erreur lors de la récupération des messages:', error);
       throw error;
     }
   },
   
   createMessage: async (messageData: any) => {
     try {
-      console.log('Création de message avec données:', messageData);
       const response = await apiRequest(endpoints.messages, {
         method: 'POST',
         body: JSON.stringify(messageData),
       });
-      console.log('Message créé:', response);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la création du message:', error);
       throw error;
     }
   },
   
   updateMessage: async (id: string, messageData: any) => {
     try {
-      console.log('Modification de message avec données:', messageData);
       const response = await apiRequest(`${endpoints.messages}${id}/`, {
         method: 'PATCH',
         body: JSON.stringify(messageData),
       });
-      console.log('Message modifié:', response);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la modification du message:', error);
       throw error;
     }
   },

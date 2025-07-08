@@ -85,6 +85,20 @@ export const PointagePage: React.FC = () => {
     }
   };
 
+  // Charger les paramètres depuis localStorage
+  const getGpsRadius = () => {
+    try {
+      const savedSettings = localStorage.getItem('stockpro_settings');
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        return settings.gpsRadius || 100;
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des paramètres:', error);
+    }
+    return 100; // Valeur par défaut
+  };
+
   const handlePointage = async (type: 'arrivee' | 'depart' | 'pause_entree' | 'pause_sortie') => {
     if (!user || !magasin) return;
 
@@ -135,8 +149,9 @@ export const PointagePage: React.FC = () => {
         magasin.longitude
       );
 
-      if (distance > 100) {
-        toast.error(`Vous êtes trop loin du magasin (${Math.round(distance)}m). Vous devez être dans un rayon de 100m.`);
+      const allowedRadius = getGpsRadius();
+      if (distance > allowedRadius) {
+        toast.error(`Vous êtes trop loin du magasin (${Math.round(distance)}m). Vous devez être dans un rayon de ${allowedRadius}m.`);
         return;
       }
 
@@ -270,7 +285,7 @@ export const PointagePage: React.FC = () => {
 
         <div className="flex items-center text-gray-600 mb-6">
           <MapPin className="h-5 w-5 mr-2" />
-          <span>Magasin: {magasin?.nom || 'Non assigné'}</span>
+          <span>Magasin: {magasin?.nom || 'Non assigné'} (Rayon autorisé: {getGpsRadius()}m)</span>
         </div>
 
         {/* Boutons de pointage */}

@@ -5,6 +5,7 @@ import { productsService, storesService, authService, stockService } from '../..
 import { normalizeApiResponse } from '../../config/api';
 import { Produit, Stock, Magasin, User } from '../../types';
 import { safeNumber } from '../../utils/numbers';
+
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState({
     totalProduits: 0,
@@ -25,9 +26,7 @@ export const AdminDashboard: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔄 Chargement des données du dashboard...');
       
-      // 🔧 FIX: Gestion d'erreur individuelle pour chaque service
       const results = await Promise.allSettled([
         productsService.getProducts(),
         storesService.getStores(),
@@ -35,15 +34,11 @@ export const AdminDashboard: React.FC = () => {
         stockService.getStocks()
       ]);
 
-      console.log('📊 Résultats des appels API:', results);
-
-      // 🔧 FIX: Extraire les données réussies
       const produitsResponse = results[0].status === 'fulfilled' ? results[0].value : [];
       const magasinsResponse = results[1].status === 'fulfilled' ? results[1].value : [];
       const utilisateursResponse = results[2].status === 'fulfilled' ? results[2].value : [];
       const stocksResponse = results[3].status === 'fulfilled' ? results[3].value : [];
 
-      // 🔧 FIX: Afficher les erreurs mais continuer le traitement
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
           const serviceName = ['produits', 'magasins', 'utilisateurs', 'stocks'][index];
@@ -51,14 +46,6 @@ export const AdminDashboard: React.FC = () => {
         }
       });
 
-      console.log('📦 Données reçues:', {
-        produits: produitsResponse,
-        magasins: magasinsResponse,
-        utilisateurs: utilisateursResponse,
-        stocks: stocksResponse
-      });
-
-      // 🔧 FIX: Normalisation avec gestion d'erreur
       const produits = normalizeApiResponse(produitsResponse || []).map((item: any) => ({
         ...item,
         id: Number(item.id),
@@ -83,48 +70,24 @@ export const AdminDashboard: React.FC = () => {
         ...item,
         id: Number(item.id),
         quantite: safeNumber(item.quantite, 0),
-        // 🔧 FIX: Gestion multiple des formats d'API
         produit_id: Number(item.produit_id || item.product || item.produit),
         magasin_id: Number(item.magasin_id || item.magasin || item.store),
         updatedAt: new Date(item.updated_at || item.updatedAt || Date.now())
       })).filter(stock => 
-        // 🔧 FIX: Filtrer les stocks invalides
         !isNaN(stock.produit_id) && 
         !isNaN(stock.magasin_id) && 
         stock.produit_id > 0 && 
         stock.magasin_id > 0
       ) as Stock[];
 
-      console.log('✅ Données normalisées:', { 
-        produits: produits.length, 
-        magasins: magasins.length, 
-        utilisateurs: utilisateurs.length, 
-        stocks: stocks.length 
-      });
-
-      // 🔧 FIX: Améliorer le calcul des statistiques
       let alertesCount = 0;
       let valeurTotale = 0;
       const stockDataMap = new Map<string, number>();
 
-      // 🔧 FIX: Créer des maps pour optimiser les recherches
       const produitsMap = new Map(produits.map(p => [Number(p.id), p]));
       const magasinsMap = new Map(magasins.map(m => [Number(m.id), m]));
 
-      console.log('🗺️ Maps créées:', {
-        produitsMap: produitsMap.size,
-        magasinsMap: magasinsMap.size,
-        stocksToProcess: stocks.length
-      });
-
-      stocks.forEach((stock, index) => {
-        console.log(`📊 Traitement du stock ${index + 1}/${stocks.length}:`, {
-          stockId: stock.id,
-          produitId: stock.produit_id,
-          magasinId: stock.magasin_id,
-          quantite: stock.quantite
-        });
-        
+      stocks.forEach((stock) => {
         const produit = produitsMap.get(Number(stock.produit_id));
         const magasin = magasinsMap.get(Number(stock.magasin_id));
         
@@ -133,40 +96,25 @@ export const AdminDashboard: React.FC = () => {
           const prixUnitaire = safeNumber(produit.prix_unitaire, 0);
           const seuilAlerte = safeNumber(produit.seuil_alerte, 0);
           
-          // 🔧 FIX: Vérifier les alertes
           if (quantite <= seuilAlerte) {
             alertesCount++;
-            console.log(`⚠️ Alerte stock: ${produit.nom} - ${quantite} <= ${seuilAlerte}`);
           }
           
-          // 🔧 FIX: Calculer la valeur
           const valeurStock = quantite * prixUnitaire;
           valeurTotale += valeurStock;
           
-          // 🔧 FIX: Grouper par magasin
           const magasinNom = magasin.nom || `Magasin ${magasin.id}`;
           const currentQuantite = stockDataMap.get(magasinNom) || 0;
           stockDataMap.set(magasinNom, currentQuantite + quantite);
-          
-          console.log(`✅ Stock traité: ${produit.nom} @ ${magasinNom} - ${quantite} unités, valeur: ${valeurStock}€`);
-        } else {
-          console.warn(`⚠️ Stock orphelin:`, {
-            stockId: stock.id,
-            produitId: stock.produit_id,
-            magasinId: stock.magasin_id,
-            produitTrouve: !!produit,
-            magasinTrouve: !!magasin
-          });
         }
       });
 
-      // 🔧 FIX: Créer les données pour le graphique
       const stockChartData = Array.from(stockDataMap.entries())
         .map(([nom, quantite]) => ({
           magasin: nom,
           quantite: safeNumber(quantite, 0)
         }))
-        .sort((a, b) => b.quantite - a.quantite); // Trier par quantité décroissante
+        .sort((a, b) => b.quantite - a.quantite);
 
       const finalStats = {
         totalProduits: produits.length,
@@ -176,16 +124,8 @@ export const AdminDashboard: React.FC = () => {
         valeurTotaleStock: safeNumber(valeurTotale, 0)
       };
 
-      console.log('📈 Statistiques finales:', finalStats);
-      console.log('📊 Données graphique:', stockChartData);
-
       setStats(finalStats);
       setStockData(stockChartData);
-
-      // 🔧 FIX: Afficher un message si aucune donnée de stock
-      if (stockChartData.length === 0) {
-        console.warn('⚠️ Aucune donnée de stock disponible pour les graphiques');
-      }
 
     } catch (error) {
       console.error('❌ Erreur lors du chargement des données:', error);
@@ -231,16 +171,8 @@ export const AdminDashboard: React.FC = () => {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Dashboard Administrateur</h1>
-        <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => fetchDashboardData()}
-            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Actualiser
-          </button>
-          <div className="text-sm text-gray-500">
-            Dernière mise à jour: {new Date().toLocaleString('fr-FR')}
-          </div>
+        <div className="text-sm text-gray-500">
+          Dernière mise à jour: {new Date().toLocaleString('fr-FR')}
         </div>
       </div>
 
@@ -394,27 +326,6 @@ export const AdminDashboard: React.FC = () => {
               <p className="text-red-600 mt-1">
                 Certains produits ont atteint leur seuil d'alerte. Vérifiez la section Produits pour plus de détails.
               </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Section de debug - développement seulement */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <h4 className="font-medium text-gray-900 mb-2">Debug Info</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <div>
-              <h5 className="font-medium mb-1">Statistiques:</h5>
-              <pre className="text-gray-600 overflow-auto max-h-32">
-                {JSON.stringify(stats, null, 2)}
-              </pre>
-            </div>
-            <div>
-              <h5 className="font-medium mb-1">Données graphique:</h5>
-              <pre className="text-gray-600 overflow-auto max-h-32">
-                {JSON.stringify(stockData, null, 2)}
-              </pre>
             </div>
           </div>
         </div>

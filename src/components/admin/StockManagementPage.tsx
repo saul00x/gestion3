@@ -59,7 +59,6 @@ export const StockManagementPage: React.FC = () => {
     const initializeData = async () => {
       // Si le cache est valide, utiliser les données du cache
       if (isCacheValid()) {
-        console.log('📦 Utilisation du cache pour les données');
         setStocks(dataCache.stocks);
         setProduits(dataCache.produits);
         setMagasins(dataCache.magasins);
@@ -75,7 +74,6 @@ export const StockManagementPage: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      console.log('🔄 Début fetchData');
       setLoading(true);
       
       // Récupérer les données en parallèle
@@ -84,10 +82,6 @@ export const StockManagementPage: React.FC = () => {
         productsService.getProducts(),
         storesService.getStores()
       ]);
-
-      console.log("📦 STOCKS RAW ===>", stocksData);
-      console.log("🏷️ PRODUITS RAW ===>", produitsData);
-      console.log("🏪 MAGASINS RAW ===>", magasinsData);
       
       // Traiter les stocks
       const processedStocks = stocksData.map((item: any) => ({
@@ -122,7 +116,6 @@ export const StockManagementPage: React.FC = () => {
         updateCache(processedStocks, processedProduits, processedMagasins);
       }
       
-      console.log('✅ fetchData terminé');
     } catch (error) {
       console.error('❌ Erreur fetchData:', error);
       if (isMounted.current) {
@@ -134,12 +127,6 @@ export const StockManagementPage: React.FC = () => {
       }
     }
   }, [updateCache]);
-
-  // Fonction pour rafraîchir les données
-  const refreshData = useCallback(async () => {
-    dataCache.lastFetch = 0; // Forcer le rafraîchissement
-    await fetchData();
-  }, [fetchData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,12 +148,9 @@ export const StockManagementPage: React.FC = () => {
         quantite: safeNumber(formData.quantite, 0)
       };
 
-      console.log('📤 Données à envoyer:', stockData);
-
       if (editingStock) {
         // Modification d'un stock existant
         const updatedStock = await stockService.updateStock(editingStock.id, stockData);
-        console.log('✏️ Stock modifié:', updatedStock);
         
         // Mettre à jour le stock dans l'état local et le cache
         const updatedStocks = stocks.map(stock => 
@@ -194,7 +178,6 @@ export const StockManagementPage: React.FC = () => {
 
         // Créer le nouveau stock
         const newStock = await stockService.createStock(stockData);
-        console.log('✅ Nouveau stock créé:', newStock);
         
         // Ajouter le nouveau stock à l'état local et au cache
         const processedNewStock = {
@@ -264,8 +247,6 @@ export const StockManagementPage: React.FC = () => {
   };
 
   const getStockWithDetails = useCallback(() => {
-    console.log('🔍 Mapping des stocks avec détails...');
-    
     return stocks.map(stock => {
       const stockProduitId = stock.produit_id.toString();
       const stockMagasinId = stock.magasin_id.toString();
@@ -304,22 +285,13 @@ export const StockManagementPage: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900">Gestion des Stocks</h1>
           <p className="text-gray-600 mt-1">Gérez les stocks de tous vos magasins</p>
         </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={refreshData}
-            disabled={loading}
-            className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 disabled:opacity-50 transition-colors duration-200"
-          >
-            {loading ? 'Chargement...' : 'Actualiser'}
-          </button>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
-          >
-            <Plus className="h-5 w-5" />
-            <span>Nouveau Stock</span>
-          </button>
-        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
+        >
+          <Plus className="h-5 w-5" />
+          <span>Nouveau Stock</span>
+        </button>
       </div>
 
       {/* Filters */}

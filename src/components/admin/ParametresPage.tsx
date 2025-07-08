@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings, Database, Shield, Bell, Globe, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -31,8 +31,30 @@ export const ParametresPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('general');
 
   const handleSave = () => {
-    // Ici vous pourriez sauvegarder les paramètres dans la base de données
-    toast.success('Paramètres sauvegardés avec succès');
+    // Sauvegarder les paramètres dans le localStorage
+    try {
+      localStorage.setItem('stockpro_settings', JSON.stringify(settings));
+      toast.success('Paramètres sauvegardés avec succès');
+    } catch (error) {
+      toast.error('Erreur lors de la sauvegarde des paramètres');
+    }
+  };
+
+  // Charger les paramètres au démarrage
+  useEffect(() => {
+    try {
+      const savedSettings = localStorage.getItem('stockpro_settings');
+      if (savedSettings) {
+        const parsedSettings = JSON.parse(savedSettings);
+        setSettings({ ...settings, ...parsedSettings });
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des paramètres:', error);
+    }
+  }, []);
+
+  const handleSettingChange = (key: string, value: any) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
   };
 
   const tabs = [
@@ -97,7 +119,7 @@ export const ParametresPage: React.FC = () => {
                   <input
                     type="text"
                     value={settings.nomEntreprise}
-                    onChange={(e) => setSettings({ ...settings, nomEntreprise: e.target.value })}
+                    onChange={(e) => handleSettingChange('nomEntreprise', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -109,7 +131,7 @@ export const ParametresPage: React.FC = () => {
                   <input
                     type="email"
                     value={settings.emailContact}
-                    onChange={(e) => setSettings({ ...settings, emailContact: e.target.value })}
+                    onChange={(e) => handleSettingChange('emailContact', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -121,7 +143,7 @@ export const ParametresPage: React.FC = () => {
                 </label>
                 <textarea
                   value={settings.adresseEntreprise}
-                  onChange={(e) => setSettings({ ...settings, adresseEntreprise: e.target.value })}
+                  onChange={(e) => handleSettingChange('adresseEntreprise', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   rows={3}
                 />
@@ -140,7 +162,7 @@ export const ParametresPage: React.FC = () => {
                 <input
                   type="number"
                   value={settings.sessionTimeout}
-                  onChange={(e) => setSettings({ ...settings, sessionTimeout: parseInt(e.target.value) })}
+                  onChange={(e) => handleSettingChange('sessionTimeout', parseInt(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   min="5"
                   max="480"
@@ -154,7 +176,7 @@ export const ParametresPage: React.FC = () => {
                     <p className="text-sm text-gray-500">Obliger les utilisateurs à changer leur mot de passe régulièrement</p>
                   </div>
                   <button
-                    onClick={() => setSettings({ ...settings, forcePasswordChange: !settings.forcePasswordChange })}
+                    onClick={() => handleSettingChange('forcePasswordChange', !settings.forcePasswordChange)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       settings.forcePasswordChange ? 'bg-blue-600' : 'bg-gray-200'
                     }`}
@@ -173,7 +195,7 @@ export const ParametresPage: React.FC = () => {
                     <p className="text-sm text-gray-500">Activer l'authentification à deux facteurs pour plus de sécurité</p>
                   </div>
                   <button
-                    onClick={() => setSettings({ ...settings, enableTwoFactor: !settings.enableTwoFactor })}
+                    onClick={() => handleSettingChange('enableTwoFactor', !settings.enableTwoFactor)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       settings.enableTwoFactor ? 'bg-blue-600' : 'bg-gray-200'
                     }`}
@@ -200,7 +222,7 @@ export const ParametresPage: React.FC = () => {
                     <p className="text-sm text-gray-500">Recevoir des notifications par email</p>
                   </div>
                   <button
-                    onClick={() => setSettings({ ...settings, emailNotifications: !settings.emailNotifications })}
+                    onClick={() => handleSettingChange('emailNotifications', !settings.emailNotifications)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       settings.emailNotifications ? 'bg-blue-600' : 'bg-gray-200'
                     }`}
@@ -219,7 +241,7 @@ export const ParametresPage: React.FC = () => {
                     <p className="text-sm text-gray-500">Recevoir des alertes quand le stock est bas</p>
                   </div>
                   <button
-                    onClick={() => setSettings({ ...settings, stockAlerts: !settings.stockAlerts })}
+                    onClick={() => handleSettingChange('stockAlerts', !settings.stockAlerts)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       settings.stockAlerts ? 'bg-blue-600' : 'bg-gray-200'
                     }`}
@@ -240,7 +262,7 @@ export const ParametresPage: React.FC = () => {
                 <input
                   type="number"
                   value={settings.lowStockThreshold}
-                  onChange={(e) => setSettings({ ...settings, lowStockThreshold: parseInt(e.target.value) })}
+                  onChange={(e) => handleSettingChange('lowStockThreshold', parseInt(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   min="1"
                 />
@@ -259,7 +281,7 @@ export const ParametresPage: React.FC = () => {
                 <input
                   type="number"
                   value={settings.gpsRadius}
-                  onChange={(e) => setSettings({ ...settings, gpsRadius: parseInt(e.target.value) })}
+                  onChange={(e) => handleSettingChange('gpsRadius', parseInt(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   min="10"
                   max="1000"
@@ -275,7 +297,7 @@ export const ParametresPage: React.FC = () => {
                   <p className="text-sm text-gray-500">Activer la vérification de position pour le pointage</p>
                 </div>
                 <button
-                  onClick={() => setSettings({ ...settings, enableGpsTracking: !settings.enableGpsTracking })}
+                  onClick={() => handleSettingChange('enableGpsTracking', !settings.enableGpsTracking)}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     settings.enableGpsTracking ? 'bg-blue-600' : 'bg-gray-200'
                   }`}
@@ -300,7 +322,7 @@ export const ParametresPage: React.FC = () => {
                   <p className="text-sm text-gray-500">Activer la sauvegarde automatique des données</p>
                 </div>
                 <button
-                  onClick={() => setSettings({ ...settings, autoBackup: !settings.autoBackup })}
+                  onClick={() => handleSettingChange('autoBackup', !settings.autoBackup)}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     settings.autoBackup ? 'bg-blue-600' : 'bg-gray-200'
                   }`}
@@ -319,7 +341,7 @@ export const ParametresPage: React.FC = () => {
                 </label>
                 <select
                   value={settings.backupFrequency}
-                  onChange={(e) => setSettings({ ...settings, backupFrequency: e.target.value })}
+                  onChange={(e) => handleSettingChange('backupFrequency', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="hourly">Toutes les heures</option>

@@ -21,11 +21,6 @@ export const StockPage: React.FC = () => {
   });
 
   useEffect(() => {
-    console.log('User data:', user);
-    console.log('Magasin ID:', user?.magasin_id);
-  }, [user]);
-
-  useEffect(() => {
     if (user?.magasin_id) {
       fetchStockData();
     } else {
@@ -44,15 +39,20 @@ export const StockPage: React.FC = () => {
       // Récupérer les stocks du magasin
       const stocksData = await stockService.getStocks();
       
-      // CORRECTION : Normalisation des IDs
+      // Normalisation des IDs et filtrage par magasin
       const normalizedStocks = stocksData.map((item: any) => ({
         ...item,
         id: Number(item.id),
-        produit_id: Number(item.product), // Conversion ici
-        magasin_id: Number(item.magasin), // Conversion ici
-        quantite: Number(item.quantity),
+        produit_id: Number(item.produit_id || item.product || item.produit),
+        magasin_id: Number(item.magasin_id || item.magasin || item.store),
+        quantite: Number(item.quantite || item.quantity),
         updatedAt: new Date(item.updated_at)
-      })) as Stock[];
+      })).filter((stock: any) => 
+        !isNaN(stock.produit_id) && 
+        !isNaN(stock.magasin_id) && 
+        stock.produit_id > 0 && 
+        stock.magasin_id > 0
+      ) as Stock[];
 
       // Récupérer tous les produits
       const produitsData = await productsService.getProducts();
@@ -63,12 +63,11 @@ export const StockPage: React.FC = () => {
       })) as Produit[];
       setProduits(produits);
 
-      // Filtrage avec comparaison numérique pour le magasin de l'utilisateur
+      // Filtrage pour le magasin de l'utilisateur
       const filteredUserStocks = normalizedStocks.filter(stock => {
-        return stock.magasin_id === user.magasin_id;
+        return Number(stock.magasin_id) === Number(user.magasin_id);
       });
 
-      console.log('Stocks filtrés pour ce magasin:', filteredUserStocks);
       setStocks(filteredUserStocks);
       
       if (filteredUserStocks.length === 0) {
@@ -76,7 +75,6 @@ export const StockPage: React.FC = () => {
       }
 
     } catch (error: unknown) {
-      console.error('Erreur lors du chargement du stock:', error);
       setError('Erreur lors du chargement du stock: ' + (error instanceof Error ? error.message : String(error)));
       toast.error('Erreur lors du chargement du stock');
     } finally {
@@ -117,7 +115,6 @@ export const StockPage: React.FC = () => {
       resetMouvementForm();
       fetchStockData();
     } catch (error) {
-      console.error('Erreur mouvement:', error);
       toast.error('Erreur lors de l\'enregistrement du mouvement');
     }
   };
@@ -134,11 +131,9 @@ export const StockPage: React.FC = () => {
 
  const getStockWithProduct = () => {
     const result = stocks.map(stock => {
-      // CORRECTION : Conversion numérique et gestion d'erreur
-      const produit = produits.find(p => p.id === stock.produit_id);
+      const produit = produits.find(p => Number(p.id) === Number(stock.produit_id));
       
       if (!produit) {
-        console.warn(`Produit non trouvé pour stock ID: ${stock.id}, produit ID: ${stock.produit_id}`);
         return null;
       }
       
@@ -192,15 +187,6 @@ export const StockPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Debug Info */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <h3 className="font-semibold text-yellow-800 mb-2">Debug Info:</h3>
-        <p className="text-sm text-yellow-700">Magasin ID: {user?.magasin_id}</p>
-        <p className="text-sm text-yellow-700">Nombre de stocks: {stocks.length}</p>
-        <p className="text-sm text-yellow-700">Nombre de produits: {produits.length}</p>
-        <p className="text-sm text-yellow-700">Stocks filtrés: {filteredStocks.length}</p>
-      </div>
-
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Stock du Magasin</h1>
@@ -275,10 +261,6 @@ export const StockPage: React.FC = () => {
                     src={`http://localhost:8000${produit.image_url}`}
                     alt={produit.nom}
                     className="w-full h-full object-cover"
-                    onError={(e) => {
-                      console.log('Erreur chargement image:', produit.image_url);
-                      e.currentTarget.style.display = 'none';
-                    }}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
