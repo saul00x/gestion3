@@ -5,7 +5,7 @@ import { productsService, storesService, authService, stockService } from '../..
 import { normalizeApiResponse } from '../../config/api';
 import { Produit, Stock, Magasin, User } from '../../types';
 import { safeNumber } from '../../utils/numbers';
-
+//yes
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState({
     totalProduits: 0,
