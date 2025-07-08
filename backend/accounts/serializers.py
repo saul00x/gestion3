@@ -61,10 +61,11 @@ class UserSerializer(serializers.ModelSerializer):
 
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
+    username = serializers.CharField(required=False, allow_blank=True)  # Ajout de ce champ
     
     class Meta:
         model = User
-        fields = ['email', 'password', 'nom', 'prenom', 'role', 'magasin', 'image']
+        fields = ['email', 'password', 'nom', 'prenom', 'role', 'magasin', 'image', 'username']
     
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
@@ -73,6 +74,11 @@ class UserCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         password = validated_data.pop('password')
+        
+        # Générer le username automatiquement si non fourni
+        if not validated_data.get('username'):
+            validated_data['username'] = validated_data['email'].split('@')[0]
+        
         user = User.objects.create_user(**validated_data)
         user.set_password(password)
         user.save()

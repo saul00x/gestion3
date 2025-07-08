@@ -16,6 +16,7 @@ export const AdminDashboard: React.FC = () => {
   });
   const [stockData, setStockData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -23,121 +24,173 @@ export const AdminDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      console.log('Chargement des données du dashboard...');
+      setLoading(true);
+      setError(null);
+      console.log('🔄 Chargement des données du dashboard...');
       
-      // Récupérer toutes les données en parallèle
-      const [produitsResponse, magasinsResponse, utilisateursResponse, stocksResponse] = await Promise.all([
+      // 🔧 FIX: Gestion d'erreur individuelle pour chaque service
+      const results = await Promise.allSettled([
         productsService.getProducts(),
         storesService.getStores(),
         authService.getUsers(),
         stockService.getStocks()
       ]);
 
-      console.log('Données reçues:', {
+      console.log('📊 Résultats des appels API:', results);
+
+      // 🔧 FIX: Extraire les données réussies
+      const produitsResponse = results[0].status === 'fulfilled' ? results[0].value : [];
+      const magasinsResponse = results[1].status === 'fulfilled' ? results[1].value : [];
+      const utilisateursResponse = results[2].status === 'fulfilled' ? results[2].value : [];
+      const stocksResponse = results[3].status === 'fulfilled' ? results[3].value : [];
+
+      // 🔧 FIX: Afficher les erreurs mais continuer le traitement
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const serviceName = ['produits', 'magasins', 'utilisateurs', 'stocks'][index];
+          console.error(`❌ Erreur ${serviceName}:`, result.reason);
+        }
+      });
+
+      console.log('📦 Données reçues:', {
         produits: produitsResponse,
         magasins: magasinsResponse,
         utilisateurs: utilisateursResponse,
         stocks: stocksResponse
       });
 
-      // Normaliser toutes les réponses
-      const produits = normalizeApiResponse(produitsResponse).map((item: any) => ({
+      // 🔧 FIX: Normalisation avec gestion d'erreur
+      const produits = normalizeApiResponse(produitsResponse || []).map((item: any) => ({
         ...item,
+        id: Number(item.id),
         prix_unitaire: safeNumber(item.prix_unitaire, 0),
         seuil_alerte: safeNumber(item.seuil_alerte, 0),
-        createdAt: new Date(item.created_at)
+        createdAt: new Date(item.created_at || Date.now())
       })) as Produit[];
 
-      const magasins = normalizeApiResponse(magasinsResponse).map((item: any) => ({
+      const magasins = normalizeApiResponse(magasinsResponse || []).map((item: any) => ({
         ...item,
-        createdAt: new Date(item.created_at)
+        id: Number(item.id),
+        createdAt: new Date(item.created_at || Date.now())
       })) as Magasin[];
 
-      const utilisateurs = normalizeApiResponse(utilisateursResponse).map((item: any) => ({
+      const utilisateurs = normalizeApiResponse(utilisateursResponse || []).map((item: any) => ({
         ...item,
-        createdAt: new Date(item.date_joined || item.created_at)
+        id: Number(item.id),
+        createdAt: new Date(item.date_joined || item.created_at || Date.now())
       })) as User[];
 
-      const stocks = normalizeApiResponse(stocksResponse).map((item: any) => ({
+      const stocks = normalizeApiResponse(stocksResponse || []).map((item: any) => ({
         ...item,
+        id: Number(item.id),
         quantite: safeNumber(item.quantite, 0),
-        // 🔧 FIX: Convertir les IDs en numbers pour la comparaison
-        produit_id: parseInt(item.produit_id) || item.produit,
-        magasin_id: parseInt(item.magasin_id) || item.magasin,
-        updatedAt: new Date(item.updated_at)
-      })) as Stock[];
+        // 🔧 FIX: Gestion multiple des formats d'API
+        produit_id: Number(item.produit_id || item.product || item.produit),
+        magasin_id: Number(item.magasin_id || item.magasin || item.store),
+        updatedAt: new Date(item.updated_at || item.updatedAt || Date.now())
+      })).filter(stock => 
+        // 🔧 FIX: Filtrer les stocks invalides
+        !isNaN(stock.produit_id) && 
+        !isNaN(stock.magasin_id) && 
+        stock.produit_id > 0 && 
+        stock.magasin_id > 0
+      ) as Stock[];
 
-      console.log('Données normalisées:', { produits, magasins, utilisateurs, stocks });
+      console.log('✅ Données normalisées:', { 
+        produits: produits.length, 
+        magasins: magasins.length, 
+        utilisateurs: utilisateurs.length, 
+        stocks: stocks.length 
+      });
 
-      // Calculer les alertes de stock et la valeur totale
+      // 🔧 FIX: Améliorer le calcul des statistiques
       let alertesCount = 0;
       let valeurTotale = 0;
-      const stockDataMap = new Map();
+      const stockDataMap = new Map<string, number>();
 
-      stocks.forEach(stock => {
-        console.log('Traitement du stock:', stock); // Debug
+      // 🔧 FIX: Créer des maps pour optimiser les recherches
+      const produitsMap = new Map(produits.map(p => [Number(p.id), p]));
+      const magasinsMap = new Map(magasins.map(m => [Number(m.id), m]));
+
+      console.log('🗺️ Maps créées:', {
+        produitsMap: produitsMap.size,
+        magasinsMap: magasinsMap.size,
+        stocksToProcess: stocks.length
+      });
+
+      stocks.forEach((stock, index) => {
+        console.log(`📊 Traitement du stock ${index + 1}/${stocks.length}:`, {
+          stockId: stock.id,
+          produitId: stock.produit_id,
+          magasinId: stock.magasin_id,
+          quantite: stock.quantite
+        });
         
-        // 🔧 FIX: Conversion des IDs pour la comparaison
-        const produitId = parseInt(stock.produit_id?.toString() || '0');
-        const magasinId = parseInt(stock.magasin_id?.toString() || '0');
-        
-        const produit = produits.find(p => parseInt(p.id?.toString() || '0') === produitId);
-        const magasin = magasins.find(m => parseInt(m.id?.toString() || '0') === magasinId);
-        
-        console.log('Produit trouvé:', produit, 'Magasin trouvé:', magasin); // Debug
+        const produit = produitsMap.get(Number(stock.produit_id));
+        const magasin = magasinsMap.get(Number(stock.magasin_id));
         
         if (produit && magasin) {
           const quantite = safeNumber(stock.quantite, 0);
           const prixUnitaire = safeNumber(produit.prix_unitaire, 0);
           const seuilAlerte = safeNumber(produit.seuil_alerte, 0);
           
-          console.log('Calculs:', { quantite, prixUnitaire, seuilAlerte }); // Debug
-          
+          // 🔧 FIX: Vérifier les alertes
           if (quantite <= seuilAlerte) {
             alertesCount++;
+            console.log(`⚠️ Alerte stock: ${produit.nom} - ${quantite} <= ${seuilAlerte}`);
           }
           
+          // 🔧 FIX: Calculer la valeur
           const valeurStock = quantite * prixUnitaire;
           valeurTotale += valeurStock;
           
-          console.log('Valeur ajoutée:', valeurStock, 'Total:', valeurTotale); // Debug
-
-          const key = magasin.nom;
-          if (stockDataMap.has(key)) {
-            stockDataMap.set(key, stockDataMap.get(key) + quantite);
-          } else {
-            stockDataMap.set(key, quantite);
-          }
+          // 🔧 FIX: Grouper par magasin
+          const magasinNom = magasin.nom || `Magasin ${magasin.id}`;
+          const currentQuantite = stockDataMap.get(magasinNom) || 0;
+          stockDataMap.set(magasinNom, currentQuantite + quantite);
+          
+          console.log(`✅ Stock traité: ${produit.nom} @ ${magasinNom} - ${quantite} unités, valeur: ${valeurStock}€`);
         } else {
-          console.log('Produit ou magasin non trouvé pour le stock:', stock); // Debug
+          console.warn(`⚠️ Stock orphelin:`, {
+            stockId: stock.id,
+            produitId: stock.produit_id,
+            magasinId: stock.magasin_id,
+            produitTrouve: !!produit,
+            magasinTrouve: !!magasin
+          });
         }
       });
 
-      const stockChartData = Array.from(stockDataMap.entries()).map(([nom, quantite]) => ({
-        magasin: nom,
-        quantite: safeNumber(quantite, 0)
-      }));
+      // 🔧 FIX: Créer les données pour le graphique
+      const stockChartData = Array.from(stockDataMap.entries())
+        .map(([nom, quantite]) => ({
+          magasin: nom,
+          quantite: safeNumber(quantite, 0)
+        }))
+        .sort((a, b) => b.quantite - a.quantite); // Trier par quantité décroissante
 
-      console.log('Statistiques calculées:', {
-        totalProduits: produits.length,
-        totalMagasins: magasins.length,
-        totalUtilisateurs: utilisateurs.length,
-        alertesStock: alertesCount,
-        valeurTotaleStock: valeurTotale,
-        stockChartData
-      });
-
-      setStats({
+      const finalStats = {
         totalProduits: produits.length,
         totalMagasins: magasins.length,
         totalUtilisateurs: utilisateurs.length,
         alertesStock: alertesCount,
         valeurTotaleStock: safeNumber(valeurTotale, 0)
-      });
+      };
 
+      console.log('📈 Statistiques finales:', finalStats);
+      console.log('📊 Données graphique:', stockChartData);
+
+      setStats(finalStats);
       setStockData(stockChartData);
+
+      // 🔧 FIX: Afficher un message si aucune donnée de stock
+      if (stockChartData.length === 0) {
+        console.warn('⚠️ Aucune donnée de stock disponible pour les graphiques');
+      }
+
     } catch (error) {
-      console.error('Erreur lors du chargement des données:', error);
+      console.error('❌ Erreur lors du chargement des données:', error);
+      setError('Erreur lors du chargement des données. Veuillez rafraîchir la page.');
     } finally {
       setLoading(false);
     }
@@ -147,18 +200,48 @@ export const AdminDashboard: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <div className="ml-4">
+          <p className="text-lg font-medium text-gray-900">Chargement du dashboard...</p>
+          <p className="text-sm text-gray-500">Récupération des données en cours</p>
+        </div>
       </div>
     );
   }
 
-  const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <p className="text-lg font-medium text-red-900 mb-2">Erreur de chargement</p>
+          <p className="text-sm text-red-600 mb-4">{error}</p>
+          <button 
+            onClick={() => fetchDashboardData()}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Réessayer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1'];
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Dashboard Administrateur</h1>
-        <div className="text-sm text-gray-500">
-          Dernière mise à jour: {new Date().toLocaleString('fr-FR')}
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={() => fetchDashboardData()}
+            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Actualiser
+          </button>
+          <div className="text-sm text-gray-500">
+            Dernière mise à jour: {new Date().toLocaleString('fr-FR')}
+          </div>
         </div>
       </div>
 
@@ -233,14 +316,25 @@ export const AdminDashboard: React.FC = () => {
       {/* Graphiques */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Stock par Magasin</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">
+            Stock par Magasin ({stockData.length} magasin{stockData.length > 1 ? 's' : ''})
+          </h3>
           {stockData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={stockData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="magasin" />
+                <XAxis 
+                  dataKey="magasin" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
                 <YAxis />
-                <Tooltip />
+                <Tooltip 
+                  formatter={(value) => [value, 'Quantité']}
+                  labelFormatter={(label) => `Magasin: ${label}`}
+                />
                 <Bar dataKey="quantite" fill="#3B82F6" />
               </BarChart>
             </ResponsiveContainer>
@@ -248,7 +342,8 @@ export const AdminDashboard: React.FC = () => {
             <div className="flex items-center justify-center h-64 text-gray-500">
               <div className="text-center">
                 <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Aucune donnée de stock disponible</p>
+                <p className="font-medium">Aucune donnée de stock disponible</p>
+                <p className="text-sm mt-2">Vérifiez que des stocks sont configurés</p>
               </div>
             </div>
           )}
@@ -273,14 +368,15 @@ export const AdminDashboard: React.FC = () => {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip formatter={(value) => [value, 'Quantité']} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
             <div className="flex items-center justify-center h-64 text-gray-500">
               <div className="text-center">
                 <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Aucune donnée de stock disponible</p>
+                <p className="font-medium">Aucune donnée de stock disponible</p>
+                <p className="text-sm mt-2">Vérifiez que des stocks sont configurés</p>
               </div>
             </div>
           )}
@@ -294,7 +390,7 @@ export const AdminDashboard: React.FC = () => {
             <AlertTriangle className="h-6 w-6 text-red-600 mr-3" />
             <div>
               <h3 className="text-lg font-medium text-red-800">
-                Attention: {stats.alertesStock} produit(s) en rupture de stock
+                Attention: {stats.alertesStock} produit{stats.alertesStock > 1 ? 's' : ''} en rupture de stock
               </h3>
               <p className="text-red-600 mt-1">
                 Certains produits ont atteint leur seuil d'alerte. Vérifiez la section Produits pour plus de détails.
@@ -304,17 +400,26 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Section de debug - à supprimer en production */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <h4 className="font-medium text-gray-900 mb-2">Debug Info (à supprimer en production)</h4>
-        <pre className="text-xs text-gray-600 overflow-auto max-h-32">
-          {JSON.stringify({
-            statsCalculated: stats,
-            stockDataLength: stockData.length,
-            stockDataSample: stockData.slice(0, 3)
-          }, null, 2)}
-        </pre>
-      </div>
+      {/* Section de debug - développement seulement */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <h4 className="font-medium text-gray-900 mb-2">Debug Info</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div>
+              <h5 className="font-medium mb-1">Statistiques:</h5>
+              <pre className="text-gray-600 overflow-auto max-h-32">
+                {JSON.stringify(stats, null, 2)}
+              </pre>
+            </div>
+            <div>
+              <h5 className="font-medium mb-1">Données graphique:</h5>
+              <pre className="text-gray-600 overflow-auto max-h-32">
+                {JSON.stringify(stockData, null, 2)}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

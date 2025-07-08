@@ -6,7 +6,7 @@ import { User as UserType, Magasin } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { ImageUpload } from '../ImageUpload';
 import toast from 'react-hot-toast';
-
+//yes
 export const UtilisateursPage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserType[]>([]);
@@ -63,101 +63,127 @@ export const UtilisateursPage: React.FC = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  // UtilisateursPage.tsx - Fonction handleSubmit corrigée
 
-    try {
-      if (editingUser) {
-        // Modification d'un utilisateur existant
-        const updateData: any = {
-          nom: formData.nom,
-          prenom: formData.prenom,
-          role: formData.role,
-        };
-        
-        if (formData.magasin) {
-          updateData.magasin = formData.magasin;
-        }
-        
-        if (formData.image) {
-          updateData.image = formData.image;
-        }
+// UtilisateursPage.tsx - handleSubmit avec validation renforcée
 
-        console.log('Modification utilisateur:', updateData);
-        await authService.updateUser(editingUser.id, updateData);
-        toast.success('Utilisateur modifié avec succès');
-      } else {
-        // Création d'un nouvel utilisateur
-        if (!formData.password) {
-          toast.error('Le mot de passe est requis pour créer un utilisateur');
-          return;
-        }
-        
-        const userData = {
-          email: formData.email,
-          nom: formData.nom,
-          prenom: formData.prenom,
-          password: formData.password,
-          role: formData.role,
-          magasin: formData.magasin || null,
-          image: formData.image
-        };
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
 
-        console.log('Création utilisateur:', userData);
-        await authService.createUser(userData);
-        toast.success('Utilisateur créé avec succès');
-      }
-
-      resetForm();
-      await fetchUsers();
-    } catch (error: any) {
-      console.error('Erreur lors de la sauvegarde:', error);
+  try {
+    if (editingUser) {
+      // Modification d'un utilisateur existant
+      const updateData: any = {
+        nom: formData.nom,
+        prenom: formData.prenom,
+        role: formData.role,
+      };
       
-      // Amélioration de la gestion des erreurs
-      let errorMessage = 'Erreur lors de la sauvegarde';
-      
-      if (error.message) {
-        try {
-          const errorData = JSON.parse(error.message);
-          console.log('Erreur parsée:', errorData);
-          
-          if (errorData.email) {
-            if (Array.isArray(errorData.email)) {
-              errorMessage = errorData.email[0];
-            } else {
-              errorMessage = 'Cette adresse email est déjà utilisée';
-            }
-          } else if (errorData.username) {
-            if (Array.isArray(errorData.username)) {
-              errorMessage = errorData.username[0];
-            } else {
-              errorMessage = 'Ce nom d\'utilisateur est déjà utilisé';
-            }
-          } else if (errorData.detail) {
-            errorMessage = errorData.detail;
-          } else if (errorData.error) {
-            errorMessage = errorData.error;
-          } else if (errorData.non_field_errors) {
-            errorMessage = errorData.non_field_errors[0];
-          }
-        } catch {
-          if (error.message.includes('email') || error.message.includes('unique')) {
-            errorMessage = 'Cette adresse email est déjà utilisée';
-          } else if (error.message.includes('username')) {
-            errorMessage = 'Le nom d\'utilisateur est requis';
-          } else {
-            errorMessage = error.message;
-          }
-        }
+      if (formData.magasin) {
+        updateData.magasin = formData.magasin;
       }
       
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
+      if (formData.image) {
+        updateData.image = formData.image;
+      }
+
+      console.log('Modification utilisateur:', updateData);
+      await authService.updateUser(editingUser.id, updateData);
+      toast.success('Utilisateur modifié avec succès');
+    } else {
+      // Création d'un nouvel utilisateur
+      console.log('=== DÉBUT VALIDATION FRONTEND ===');
+      console.log('FormData state:', formData);
+      
+      // Validation rigoureuse des champs obligatoires
+      const requiredFields = ['email', 'nom', 'prenom', 'password', 'role'];
+      const missingFields = requiredFields.filter(field => !formData[field as keyof typeof formData]);
+      
+      if (missingFields.length > 0) {
+        const errorMsg = `Champs manquants: ${missingFields.join(', ')}`;
+        console.error(errorMsg);
+        toast.error(errorMsg);
+        return;
+      }
+      
+      // Validation du format email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        toast.error('Format d\'email invalide');
+        return;
+      }
+      
+      // Validation du mot de passe
+      if (formData.password.length < 6) {
+        toast.error('Le mot de passe doit contenir au moins 6 caractères');
+        return;
+      }
+      
+      // Préparer les données pour l'envoi
+      const userData = {
+        email: formData.email.trim(),
+        nom: formData.nom.trim(),
+        prenom: formData.prenom.trim(),
+        password: formData.password,
+        role: formData.role,
+        magasin: formData.magasin || null,
+        image: formData.image,
+      };
+
+      console.log('=== DONNÉES VALIDÉES POUR ENVOI ===');
+      console.log('userData:', userData);
+      
+      await authService.createUser(userData);
+      toast.success('Utilisateur créé avec succès');
     }
-  };
 
+    resetForm();
+    await fetchUsers();
+    
+  } catch (error: any) {
+    console.error('=== ERREUR DANS HANDLESUBMIT ===');
+    console.error('Error object:', error);
+    console.error('Error message:', error.message);
+    
+    let errorMessage = 'Erreur lors de la sauvegarde';
+    
+    if (error.message) {
+      try {
+        const errorData = JSON.parse(error.message);
+        console.log('Erreur parsée:', errorData);
+        
+        // Gestion des erreurs spécifiques
+        if (errorData.error) {
+          // Erreur du type "UserManager.create_user() missing..."
+          if (errorData.error.includes('missing') && errorData.error.includes('username')) {
+            errorMessage = 'Erreur technique: nom d\'utilisateur manquant. Veuillez réessayer.';
+          } else {
+            errorMessage = errorData.error;
+          }
+        } else if (errorData.email) {
+          errorMessage = Array.isArray(errorData.email) ? errorData.email[0] : 'Cette adresse email est déjà utilisée';
+        } else if (errorData.username) {
+          errorMessage = Array.isArray(errorData.username) ? errorData.username[0] : 'Ce nom d\'utilisateur est déjà utilisé';
+        } else if (errorData.password) {
+          errorMessage = Array.isArray(errorData.password) ? errorData.password[0] : 'Le mot de passe ne respecte pas les critères';
+        } else if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.non_field_errors) {
+          errorMessage = Array.isArray(errorData.non_field_errors) ? errorData.non_field_errors[0] : errorData.non_field_errors;
+        }
+      } catch (parseError) {
+        console.error('Erreur lors du parsing:', parseError);
+        errorMessage = error.message || 'Erreur technique inconnue';
+      }
+    }
+    
+    console.error('Message d\'erreur final:', errorMessage);
+    toast.error(errorMessage);
+  } finally {
+    setLoading(false);
+  }
+};
   const handleEdit = (user: UserType) => {
     console.log('Édition utilisateur:', user);
     setEditingUser(user);

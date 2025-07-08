@@ -28,15 +28,21 @@ export const authService = {
     }
   },
   
-  createUser: (userData: any) => {
+   // Version corrigée de la fonction createUser dans api.ts
+createUser: async (userData: any) => {
+  try {
+    console.log('=== DÉBUT CRÉATION UTILISATEUR ===');
+    console.log('Données reçues:', userData);
+
     // Créer FormData pour l'upload
     const formData = new FormData();
     
-    // Générer un username basé sur l'email si pas fourni
-    const username = userData.username || userData.email.split('@')[0];
+    // Générer un username basé sur l'email
+    const username = userData.email.split('@')[0];
+    console.log('Username généré:', username);
     
-    // Ajouter les champs requis
-    formData.append('username', username); // CHAMP OBLIGATOIRE
+    // Ajouter TOUS les champs requis
+    formData.append('username', username);
     formData.append('email', userData.email);
     formData.append('nom', userData.nom);
     formData.append('prenom', userData.prenom);
@@ -53,57 +59,83 @@ export const authService = {
       formData.append('image', userData.image);
     }
     
-    console.log('Création utilisateur avec données:', {
-      username,
-      email: userData.email,
-      nom: userData.nom,
-      prenom: userData.prenom,
-      role: userData.role,
-      magasin: userData.magasin
-    });
+    // Debug: afficher tout le contenu du FormData
+    console.log('=== CONTENU FORMDATA ===');
+    for (let [key, value] of formData.entries()) {
+      console.log(`${key}:`, value);
+    }
     
-    return fetch(`http://localhost:8000/api/auth/users/`, {
+    console.log('=== ENVOI REQUÊTE ===');
+    const response = await fetch(`http://localhost:8000/api/auth/users/`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        // NE PAS ajouter Content-Type avec FormData, le navigateur le fait automatiquement
       },
       body: formData,
-    }).then(async response => {
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Erreur détaillée création utilisateur:', errorData);
-        throw new Error(JSON.stringify(errorData));
-      }
-      return response.json();
     });
-  },
-  
-  updateUser: (id: string, userData: any) => {
-    const formData = new FormData();
     
-    // Ajouter les champs modifiables
-    if (userData.nom) formData.append('nom', userData.nom);
-    if (userData.prenom) formData.append('prenom', userData.prenom);
-    if (userData.role) formData.append('role', userData.role);
-    if (userData.magasin) formData.append('magasin', userData.magasin);
-    if (userData.image) formData.append('image', userData.image);
+    console.log('Status de la réponse:', response.status);
+    console.log('Headers de la réponse:', response.headers);
     
-    console.log('Modification utilisateur avec données:', userData);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Réponse d\'erreur brute:', errorText);
+      
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {
+        errorData = { error: errorText };
+      }
+      
+      console.error('Erreur détaillée création utilisateur:', errorData);
+      throw new Error(JSON.stringify(errorData));
+    }
     
-    return fetch(`http://localhost:8000/api/auth/users/${id}/`, {
-      method: 'PATCH', // Utiliser PATCH au lieu de PUT pour les mises à jour partielles
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-      },
-      body: formData,
-    }).then(async response => {
+    const result = await response.json();
+    console.log('=== UTILISATEUR CRÉÉ AVEC SUCCÈS ===');
+    console.log('Résultat:', result);
+    return result;
+    
+  } catch (error) {
+    console.error('=== ERREUR LORS DE LA CRÉATION ===');
+    console.error('Erreur complète:', error);
+    throw error;
+  }
+},
+  updateUser: async (id: string, userData: any) => {
+    try {
+      const formData = new FormData();
+      
+      // Ajouter les champs modifiables
+      if (userData.nom) formData.append('nom', userData.nom);
+      if (userData.prenom) formData.append('prenom', userData.prenom);
+      if (userData.role) formData.append('role', userData.role);
+      if (userData.magasin) formData.append('magasin', userData.magasin);
+      if (userData.image) formData.append('image', userData.image);
+      
+      console.log('Modification utilisateur avec données:', userData);
+      
+      const response = await fetch(`http://localhost:8000/api/auth/users/${id}/`, {
+        method: 'PATCH', // Utiliser PATCH au lieu de PUT pour les mises à jour partielles
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: formData,
+      });
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('Erreur détaillée modification utilisateur:', errorData);
         throw new Error(JSON.stringify(errorData));
       }
+      
       return response.json();
-    });
+    } catch (error) {
+      console.error('Erreur lors de la modification utilisateur:', error);
+      throw error;
+    }
   },
   
   deleteUser: (id: string) =>
@@ -346,13 +378,26 @@ export const stockService = {
       const normalizedData = normalizeApiResponse(response).map((stock: any) => ({
         ...stock,
         id: Number(stock.id),
-        produit_id: Number(stock.product),  // Conversion critique
-        magasin_id: Number(stock.magasin),  // Conversion critique
-        quantite: Number(stock.quantity),
-        updatedAt: new Date(stock.updated_at)
+        // 🔧 FIX: Gérer les deux formats possibles de l'API
+        produit_id: Number(stock.produit_id || stock.product || stock.produit),
+        magasin_id: Number(stock.magasin_id || stock.magasin || stock.store),
+        quantite: Number(stock.quantite || stock.quantity),
+        updatedAt: new Date(stock.updated_at || stock.updatedAt)
       }));
+      
       console.log('📥 Stocks normalisés:', normalizedData);
-      return normalizedData;
+      
+      // 🔧 FIX: Filtrer les stocks invalides
+      const validStocks = normalizedData.filter(stock => 
+        !isNaN(stock.produit_id) && 
+        !isNaN(stock.magasin_id) && 
+        !isNaN(stock.quantite) &&
+        stock.produit_id > 0 &&
+        stock.magasin_id > 0
+      );
+      
+      console.log('📥 Stocks valides:', validStocks);
+      return validStocks;
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des stocks:', error);
       throw error;
@@ -362,13 +407,22 @@ export const stockService = {
   createStock: async (stockData: any) => {
     try {
       console.log('📤 Création de stock avec données:', stockData);
+      
+      // 🔧 FIX: Normaliser les données avant envoi
+      const normalizedStockData = {
+        product: stockData.produit_id || stockData.product,
+        magasin: stockData.magasin_id || stockData.magasin,
+        quantity: stockData.quantite || stockData.quantity
+      };
+      
+      console.log('📤 Données normalisées pour création:', normalizedStockData);
+      
       const response = await apiRequest(endpoints.stocks, {
         method: 'POST',
-        body: JSON.stringify(stockData),
+        body: JSON.stringify(normalizedStockData),
       });
       console.log('✅ Stock créé:', response);
       
-      // S'assurer que la réponse contient les bonnes données
       if (!response.id) {
         throw new Error('Réponse API invalide: ID manquant');
       }
@@ -383,9 +437,17 @@ export const stockService = {
   updateStock: async (id: string, stockData: any) => {
     try {
       console.log('📝 Modification de stock avec données:', stockData);
+      
+      // 🔧 FIX: Normaliser les données avant envoi
+      const normalizedStockData = {
+        product: stockData.produit_id || stockData.product,
+        magasin: stockData.magasin_id || stockData.magasin,
+        quantity: stockData.quantite || stockData.quantity
+      };
+      
       const response = await apiRequest(`${endpoints.stocks}${id}/`, {
         method: 'PATCH',
-        body: JSON.stringify(stockData),
+        body: JSON.stringify(normalizedStockData),
       });
       console.log('✅ Stock modifié:', response);
       return response;
@@ -407,7 +469,6 @@ export const stockService = {
     }
   },
   
-  // Nouvelle fonction pour récupérer un stock spécifique
   getStock: async (id: string) => {
     try {
       console.log('📥 Récupération du stock:', id);
@@ -420,13 +481,13 @@ export const stockService = {
     }
   },
   
-  // Fonction pour vérifier si un stock existe déjà
+  // 🔧 FIX: Améliorer la fonction de vérification
   checkStockExists: async (produitId: number, magasinId: number) => {
     try {
       const stocks = await stockService.getStocks();
       return stocks.find((stock: any) => 
-        parseInt(stock.produit_id.toString()) === produitId && 
-        parseInt(stock.magasin_id.toString()) === magasinId
+        Number(stock.produit_id) === Number(produitId) && 
+        Number(stock.magasin_id) === Number(magasinId)
       );
     } catch (error) {
       console.error('❌ Erreur lors de la vérification du stock:', error);
@@ -434,7 +495,6 @@ export const stockService = {
     }
   },
   
-  // Reste des fonctions...
   getMovements: async () => {
     try {
       console.log('📥 Récupération des mouvements...');
@@ -462,7 +522,6 @@ export const stockService = {
     }
   },
 };
-
 // Attendance Services
 export const attendanceService = {
   getAttendance: async () => {
