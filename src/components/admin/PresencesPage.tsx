@@ -4,7 +4,7 @@ import { attendanceService, authService, storesService } from '../../services/ap
 import { normalizeApiResponse } from '../../config/api';
 import { Presence, User as UserType, Magasin } from '../../types';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import toast from 'react-hot-toast';
 
 export const PresencesPage: React.FC = () => {
@@ -13,6 +13,35 @@ export const PresencesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedUser, setSelectedUser] = useState('');
+
+  // NOUVELLE FONCTION : Recherche d'utilisateur améliorée
+  const findUserById = (userId: string) => {
+    if (!userId || !users || users.length === 0) return null;
+    
+    // Essayer de trouver l'utilisateur avec l'ID exact
+    let user = users.find(u => u.id === userId);
+    
+    // Si pas trouvé, essayer avec conversion string
+    if (!user) {
+      user = users.find(u => u.id?.toString() === userId || u.id === userId.toString());
+    }
+    
+    // Si pas trouvé, essayer avec conversion number
+    if (!user) {
+      try {
+        const userIdNum = parseInt(userId);
+        const userIdStr = userIdNum.toString();
+        user = users.find(u => {
+          const uId = parseInt(u.id?.toString() || '0');
+          return uId === userIdNum || u.id === userIdStr;
+        });
+      } catch (e) {
+        console.warn('Erreur conversion userId:', userId);
+      }
+    }
+    
+    return user;
+  };
 
   useEffect(() => {
     fetchData();
@@ -29,8 +58,11 @@ export const PresencesPage: React.FC = () => {
       const normalizedUsers = normalizeApiResponse(usersData);
       setUsers(normalizedUsers.map((item: any) => ({
         ...item,
+        id: item.id?.toString(), // S'assurer que l'ID est une string
         createdAt: new Date(item.date_joined || item.created_at)
       })));
+      
+      console.log('Utilisateurs chargés:', normalizedUsers.length);
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
       toast.error('Erreur lors du chargement des données');
@@ -44,6 +76,9 @@ export const PresencesPage: React.FC = () => {
       const normalizedData = normalizeApiResponse(data);
       let presencesData = normalizedData.map((item: any) => ({
         ...item,
+        id: item.id?.toString(),
+        user_id: item.user_id?.toString(),
+        magasin_id: item.magasin_id?.toString(),
         date_pointage: new Date(item.date_pointage),
         heure_entree: item.heure_entree ? new Date(item.heure_entree) : null,
         heure_sortie: item.heure_sortie ? new Date(item.heure_sortie) : null,
@@ -66,6 +101,19 @@ export const PresencesPage: React.FC = () => {
       }
 
       setPresences(presencesData);
+      
+      // Diagnostic après chargement
+      if (presencesData.length > 0) {
+        console.log('=== DIAGNOSTIC ===');
+        console.log('Présences:', presencesData.length);
+        console.log('Utilisateurs:', users.length);
+        
+        const presencesSansUtilisateur = presencesData.filter(p => !findUserById(p.user_id));
+        if (presencesSansUtilisateur.length > 0) {
+          console.warn('Présences sans utilisateur:', presencesSansUtilisateur.length);
+          console.log('IDs manquants:', presencesSansUtilisateur.map(p => p.user_id));
+        }
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des présences:', error);
       toast.error('Erreur lors du chargement des présences');
@@ -90,14 +138,14 @@ export const PresencesPage: React.FC = () => {
     ];
     
     const csvData = presences.map(presence => {
-      const user = users.find(u => u.id === presence.user_id);
+      const user = findUserById(presence.user_id); // Utiliser la nouvelle fonction
       const tempsTrail = calculateWorkTime(presence);
       
       return [
         presence.date_pointage.toLocaleDateString('fr-FR'),
-        user?.prenom || '',
-        user?.nom || '',
-        user?.email || 'Utilisateur supprimé',
+        user?.prenom || 'N/A',
+        user?.nom || 'N/A',
+        user?.email || `ID: ${presence.user_id} (introuvable)`,
         presence.magasin_nom || 'Magasin inconnu',
         presence.heure_entree?.toLocaleTimeString('fr-FR') || '',
         presence.heure_sortie?.toLocaleTimeString('fr-FR') || '',
@@ -144,80 +192,174 @@ export const PresencesPage: React.FC = () => {
   const exportToPDF = () => {
     const doc = new jsPDF();
     
-    // Titre
-    doc.setFontSize(20);
-    doc.text('Rapport de Présences', 20, 20);
+    // Configuration des couleurs
+    const primaryColor = [59, 130, 246]; // Bleu
+    const secondaryColor = [107, 114, 128]; // Gris
+    const accentColor = [16, 185, 129]; // Vert
+    
+    // En-tête avec logo et titre
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, 210, 35, 'F');
+    
+    // Titre principal
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('STOCKPRO', 20, 15);
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'normal');
+    doc.text('RAPPORT DE PRÉSENCES', 20, 25);
     
     // Informations du rapport
-    doc.setFontSize(12);
-    doc.text(`Date: ${selectedDate ? new Date(selectedDate).toLocaleDateString('fr-FR') : 'Toutes les dates'}`, 20, 35);
-    doc.text(`Utilisateur: ${selectedUser ? users.find(u => u.id === selectedUser)?.email || 'Inconnu' : 'Tous les utilisateurs'}`, 20, 45);
-    doc.text(`Généré le: ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, 20, 55);
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    
+    const reportInfo = [
+      `Période: ${selectedDate ? new Date(selectedDate).toLocaleDateString('fr-FR') : 'Toutes les dates'}`,
+      `Employé: ${selectedUser ? findUserById(selectedUser)?.email || 'Inconnu' : 'Tous les employés'}`,
+      `Généré le: ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`,
+      `Nombre d'enregistrements: ${presences.length}`
+    ];
+    
+    let yPos = 45;
+    reportInfo.forEach(info => {
+      doc.text(info, 20, yPos);
+      yPos += 7;
+    });
+    
+    // Ligne de séparation
+    doc.setDrawColor(...secondaryColor);
+    doc.setLineWidth(0.5);
+    doc.line(20, yPos + 5, 190, yPos + 5);
     
     // Données du tableau
     const tableData = presences.map(presence => {
-      const user = users.find(u => u.id === presence.user_id);
+      const user = findUserById(presence.user_id); // Utiliser la nouvelle fonction
       const tempsTrail = calculateWorkTime(presence);
       
       return [
         presence.date_pointage.toLocaleDateString('fr-FR'),
-        `${user?.prenom || ''} ${user?.nom || ''}`.trim() || 'Utilisateur supprimé',
+        user ? `${user.prenom || ''} ${user.nom || ''}`.trim() : `ID: ${presence.user_id}`,
         presence.magasin_nom || 'Magasin inconnu',
         presence.heure_entree?.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) || '-',
         presence.heure_sortie?.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) || '-',
-        presence.pause_entree?.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) || '-',
-        presence.duree_pause ? `${Math.floor(presence.duree_pause / 60)}h${(presence.duree_pause % 60).toString().padStart(2, '0')}` : '-',
+        presence.duree_pause ? `${presence.duree_pause}min` : '-',
         tempsTrail || '-'
       ];
     });
 
-    // Configuration du tableau
-    (doc as any).autoTable({
-      head: [['Date', 'Employé', 'Magasin', 'Arrivée', 'Départ', 'Début Pause', 'Durée Pause', 'Temps Travail']],
+    // Configuration du tableau avec autoTable
+    autoTable(doc, {
+      head: [['Date', 'Employé', 'Magasin', 'Arrivée', 'Départ', 'Pause', 'Temps Travail']],
       body: tableData,
-      startY: 70,
+      startY: yPos + 15,
       styles: {
-        fontSize: 8,
-        cellPadding: 3,
+        fontSize: 9,
+        cellPadding: 4,
+        lineColor: [200, 200, 200],
+        lineWidth: 0.1,
+        textColor: [51, 51, 51],
       },
       headStyles: {
-        fillColor: [59, 130, 246],
-        textColor: 255,
-        fontStyle: 'bold'
+        fillColor: primaryColor,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 10,
+        halign: 'center'
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252]
       },
+      bodyStyles: {
+        halign: 'center'
+      },
       columnStyles: {
-        0: { cellWidth: 20 }, // Date
-        1: { cellWidth: 35 }, // Employé
-        2: { cellWidth: 30 }, // Magasin
-        3: { cellWidth: 20 }, // Arrivée
-        4: { cellWidth: 20 }, // Départ
-        5: { cellWidth: 20 }, // Début Pause
-        6: { cellWidth: 20 }, // Durée Pause
-        7: { cellWidth: 25 }  // Temps Travail
+        0: { cellWidth: 25, halign: 'center' }, // Date
+        1: { cellWidth: 40, halign: 'left' },   // Employé
+        2: { cellWidth: 35, halign: 'left' },   // Magasin
+        3: { cellWidth: 20, halign: 'center' }, // Arrivée
+        4: { cellWidth: 20, halign: 'center' }, // Départ
+        5: { cellWidth: 20, halign: 'center' }, // Pause
+        6: { cellWidth: 25, halign: 'center' }  // Temps Travail
+      },
+      margin: { top: 15, left: 15, right: 15 },
+      theme: 'striped',
+      didDrawPage: function (data: any) {
+        // Pied de page
+        const pageCount = doc.internal.getNumberOfPages();
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+        
+        // Ligne de pied de page
+        doc.setDrawColor(...secondaryColor);
+        doc.setLineWidth(0.3);
+        doc.line(20, pageHeight - 20, 190, pageHeight - 20);
+        
+        // Texte du pied de page
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...secondaryColor);
+        doc.text(`Page ${data.pageNumber} sur ${pageCount}`, 105, pageHeight - 12, { align: 'center' });
+        doc.text('StockPro - Système de gestion des présences', 105, pageHeight - 7, { align: 'center' });
       }
     });
 
     // Statistiques en bas
     const finalY = (doc as any).lastAutoTable.finalY + 20;
-    doc.setFontSize(14);
-    doc.text('Statistiques:', 20, finalY);
     
-    doc.setFontSize(10);
+    // Titre des statistiques
+    doc.setFillColor(...accentColor);
+    doc.rect(20, finalY, 170, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RÉSUMÉ STATISTIQUE', 25, finalY + 6);
+    
+    // Calculs statistiques
     const employesPresents = new Set(presences.map(p => p.user_id)).size;
     const arrivees = presences.filter(p => p.heure_entree).length;
     const departs = presences.filter(p => p.heure_sortie).length;
     const pauses = presences.filter(p => p.pause_entree).length;
+    const tempsTotal = presences.reduce((total, p) => {
+      const temps = calculateWorkTime(p);
+      if (temps) {
+        const [heures, minutes] = temps.split('h');
+        return total + (parseInt(heures) * 60) + parseInt(minutes || '0');
+      }
+      return total;
+    }, 0);
     
-    doc.text(`• Employés présents: ${employesPresents}`, 20, finalY + 15);
-    doc.text(`• Arrivées enregistrées: ${arrivees}`, 20, finalY + 25);
-    doc.text(`• Départs enregistrés: ${departs}`, 20, finalY + 35);
-    doc.text(`• Pauses prises: ${pauses}`, 20, finalY + 45);
+    // Affichage des statistiques en colonnes
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    const statsY = finalY + 15;
+    const stats = [
+      [`Employés présents: ${employesPresents}`, `Temps total travaillé: ${Math.floor(tempsTotal / 60)}h${(tempsTotal % 60).toString().padStart(2, '0')}`],
+      [`Pointages d'arrivée: ${arrivees}`, `Moyenne par employé: ${employesPresents > 0 ? Math.round(tempsTotal / employesPresents) : 0} min`],
+      [`Pointages de départ: ${departs}`, `Taux de présence: ${employesPresents > 0 ? Math.round((arrivees / employesPresents) * 100) : 0}%`],
+      [`Pauses prises: ${pauses}`, `Efficacité: ${departs === arrivees ? '100%' : Math.round((departs / arrivees) * 100) + '%'}`]
+    ];
+    
+    stats.forEach((row, index) => {
+      const y = statsY + (index * 7);
+      doc.text(`• ${row[0]}`, 25, y);
+      doc.text(`• ${row[1]}`, 115, y);
+    });
+    
+    // Encadré final
+    doc.setDrawColor(...primaryColor);
+    doc.setLineWidth(1);
+    doc.rect(20, finalY, 170, stats.length * 7 + 20, 'S');
 
     // Sauvegarder le PDF
-    doc.save(`rapport_presences_${selectedDate}.pdf`);
+    const dateStr = selectedDate || new Date().toISOString().split('T')[0];
+    const fileName = `StockPro_Presences_${dateStr.replace(/-/g, '')}.pdf`;
+    doc.save(fileName);
+    
     toast.success('Rapport PDF généré avec succès');
   };
 
@@ -334,8 +476,14 @@ export const PresencesPage: React.FC = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {presences.map((presence) => {
-                  const user = users.find(u => u.id === presence.user_id);
+                  const user = findUserById(presence.user_id); // Utiliser la nouvelle fonction
                   const tempsTrail = calculateWorkTime(presence);
+                  
+                  // Log pour debugging
+                  if (!user) {
+                    console.warn(`Utilisateur non trouvé pour presence.user_id: ${presence.user_id}`);
+                  }
+                  
                   return (
                     <tr key={presence.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -363,10 +511,10 @@ export const PresencesPage: React.FC = () => {
                           </div>
                           <div className="ml-3">
                             <div className="text-sm font-medium text-gray-900">
-                              {user ? `${user.prenom} ${user.nom}` : 'Utilisateur supprimé'}
+                              {user ? `${user.prenom || ''} ${user.nom || ''}`.trim() : 'Utilisateur introuvable'}
                             </div>
                             <div className="text-sm text-gray-500">
-                              {user?.email || 'Email inconnu'}
+                              {user?.email || `ID: ${presence.user_id} (non trouvé)`}
                             </div>
                           </div>
                         </div>

@@ -75,20 +75,21 @@ export interface CommandeDetail {
   prix_unitaire: number;
 }
 
+// Dans votre fichier types.ts ou types/index.ts
 export interface Presence {
   id: string;
   user_id: string;
   magasin_id: string;
   magasin_nom: string;
   date_pointage: Date;
-  heure_entree?: Date;
-  heure_sortie?: Date;
-  pause_entree?: Date;
-  pause_sortie?: Date;
-  duree_pause?: number;
+  heure_entree: Date | null;
+  heure_sortie: Date | null;
+  pause_entree: Date | null;
+  pause_sortie: Date | null;
+  duree_pause: number | null; // en minutes
   latitude: number;
   longitude: number;
-  type: 'arrivee' | 'depart' | 'pause_entree' | 'pause_sortie';
+  type: 'arrivee' | 'depart' | 'pause_debut' | 'pause_fin';
 }
 
 export interface Message {

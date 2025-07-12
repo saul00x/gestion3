@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import UserManager as BaseUserManager
 from django.db import models
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -74,3 +76,17 @@ class User(AbstractUser):
         if not self.username:
             self.username = self.email.split('@')[0]
         super().save(*args, **kwargs)
+
+@receiver(post_delete, sender=User)
+def delete_user_presences(sender, instance, **kwargs):
+    """Supprimer automatiquement les présences quand un utilisateur est supprimé"""
+    from attendance.models import Presence
+    print(f"=== SUPPRESSION UTILISATEUR ===")
+    print(f"Utilisateur supprimé: {instance.email}")
+    
+    # Supprimer toutes les présences de cet utilisateur
+    presences_count = Presence.objects.filter(user=instance).count()
+    print(f"Nombre de présences à supprimer: {presences_count}")
+    
+    Presence.objects.filter(user=instance).delete()
+    print(f"✅ {presences_count} présences supprimées pour {instance.email}")

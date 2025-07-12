@@ -28,23 +28,34 @@ export const PointagePage: React.FC = () => {
     if (!user?.magasin_id) return;
 
     try {
+      console.log('=== FETCH DATA POINTAGE ===');
+      console.log('User magasin_id:', user.magasin_id);
+      
       // Récupérer le magasin
       const magasinsData = await storesService.getStores();
       const userMagasin = magasinsData.find((m: any) => m.id.toString() === user.magasin_id);
       
       if (userMagasin) {
+        console.log('Magasin trouvé:', userMagasin.nom);
         setMagasin({
           ...userMagasin,
           createdAt: new Date(userMagasin.created_at)
         });
+      } else {
+        console.error('Magasin non trouvé pour ID:', user.magasin_id);
       }
 
       // Récupérer l'historique des présences
       const presencesData = await attendanceService.getAttendance();
+      console.log('Présences reçues:', presencesData);
+      
       const userPresences = presencesData
-        .filter((p: any) => p.user.toString() === user.id)
+        .filter((p: any) => p.user_id?.toString() === user.id?.toString())
         .map((item: any) => ({
           ...item,
+          id: item.id?.toString(),
+          user_id: item.user_id?.toString(),
+          magasin_id: item.magasin_id?.toString(),
           date_pointage: new Date(item.date_pointage),
           heure_entree: item.heure_entree ? new Date(item.heure_entree) : null,
           heure_sortie: item.heure_sortie ? new Date(item.heure_sortie) : null,
@@ -53,6 +64,7 @@ export const PointagePage: React.FC = () => {
         }))
         .sort((a: any, b: any) => b.date_pointage.getTime() - a.date_pointage.getTime()) as Presence[];
 
+      console.log('Présences utilisateur filtrées:', userPresences.length);
       setPresences(userPresences);
 
       // Vérifier le statut actuel
@@ -63,6 +75,7 @@ export const PointagePage: React.FC = () => {
       });
 
       setTodayPresence(todayPresenceData || null);
+      console.log('Présence du jour:', todayPresenceData);
 
       // Déterminer le statut actuel
       if (todayPresenceData) {
@@ -76,6 +89,8 @@ export const PointagePage: React.FC = () => {
       } else {
         setCurrentStatus('absent');
       }
+      
+      console.log('Statut actuel:', currentStatus);
 
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
@@ -102,8 +117,13 @@ export const PointagePage: React.FC = () => {
   const handlePointage = async (type: 'arrivee' | 'depart' | 'pause_entree' | 'pause_sortie') => {
     if (!user || !magasin) return;
 
+    console.log('=== DÉBUT POINTAGE ===');
+    console.log('Type:', type);
+    console.log('User:', user.email);
+    console.log('Magasin:', magasin.nom);
+    
     // Vérifications des conditions
-    if (type === 'arrivee' && todayPresence) {
+    if (type === 'arrivee' && todayPresence?.heure_entree) {
       toast.error('Vous avez déjà pointé votre arrivée aujourd\'hui');
       return;
     }
@@ -141,7 +161,35 @@ export const PointagePage: React.FC = () => {
     setPointageLoading(true);
 
     try {
-      const position = await getCurrentPosition();
+      console.log('Obtention position GPS...');
+      
+      // Obtenir la position GPS avec retry
+      let position;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          position = await getCurrentPosition();
+          console.log('✅ Position GPS obtenue:', position);
+          break;
+        } catch (error) {
+          retryCount++;
+          console.log(`❌ Tentative ${retryCount}/${maxRetries} échouée:`, error);
+          
+          if (retryCount === maxRetries) {
+            throw new Error('Impossible d\'obtenir votre position GPS. Vérifiez que la géolocalisation est activée et autorisée pour ce site.');
+          }
+          
+          // Attendre 2 secondes avant de réessayer
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+      
+      if (!position) {
+        throw new Error('Position GPS non disponible');
+      }
+      
       const distance = calculateDistance(
         position.latitude,
         position.longitude,
@@ -150,61 +198,65 @@ export const PointagePage: React.FC = () => {
       );
 
       const allowedRadius = getGpsRadius();
+      console.log('Distance calculée:', distance, 'Rayon autorisé:', allowedRadius);
+      
       if (distance > allowedRadius) {
         toast.error(`Vous êtes trop loin du magasin (${Math.round(distance)}m). Vous devez être dans un rayon de ${allowedRadius}m.`);
         return;
       }
 
       const now = new Date();
+      const pointageData = {
+      magasin: magasin.id,
+      magasin_nom: magasin.nom,
+      date_pointage: now.getFullYear() + '-' + 
+                 String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                 String(now.getDate()).padStart(2, '0'), // ✅ SOLUTION : Format YYYY-MM-DD explicite
+      latitude: position.latitude,
+      longitude: position.longitude,
+      type: type
+      };
+      
+      console.log('=== ENVOI POINTAGE ===');
+      console.log('Données:', pointageData);
+      
+      const result = await attendanceService.createAttendance(pointageData);
+      console.log('✅ Pointage enregistré:', result);
+      
+      const messages = {
+        arrivee: 'Arrivée enregistrée avec succès !',
+        depart: 'Départ enregistré avec succès !',
+        pause_entree: 'Début de pause enregistré !',
+        pause_sortie: 'Fin de pause enregistrée !'
+      };
+      
+      toast.success(messages[type]);
 
-      if (type === 'arrivee') {
-        // Nouveau pointage d'arrivée
-        await attendanceService.createAttendance({
-          magasin: magasin.id,
-          magasin_nom: magasin.nom,
-          date_pointage: now.toISOString(),
-          heure_entree: now.toISOString(),
-          latitude: position.latitude,
-          longitude: position.longitude,
-          type: 'arrivee'
-        });
-        toast.success('Arrivée enregistrée avec succès !');
-      } else if (todayPresence) {
-        // Mise à jour du pointage existant
-        const updateData: any = {};
-        
-        if (type === 'depart') {
-          updateData.heure_sortie = now.toISOString();
-          updateData.type = 'depart';
-        } else if (type === 'pause_entree') {
-          updateData.pause_entree = now.toISOString();
-          updateData.type = 'pause_entree';
-        } else if (type === 'pause_sortie') {
-          updateData.pause_sortie = now.toISOString();
-          updateData.type = 'pause_sortie';
-          
-          // Calculer la durée de pause
-          if (todayPresence.pause_entree) {
-            const pauseDuration = Math.floor((now.getTime() - todayPresence.pause_entree.getTime()) / (1000 * 60));
-            updateData.duree_pause = pauseDuration;
-          }
-        }
+      // Recharger les données après un délai
+      console.log('Rechargement des données...');
+      setTimeout(() => {
+        fetchData();
+      }, 1000);
 
-        await attendanceService.updateAttendance(todayPresence.id, updateData);
-        
-        const messages = {
-          depart: 'Départ enregistré avec succès !',
-          pause_entree: 'Début de pause enregistré !',
-          pause_sortie: 'Fin de pause enregistrée !'
-        };
-        
-        toast.success(messages[type]);
+    } catch (error: any) {
+      console.error('❌ Erreur pointage:', error);
+      
+      // Messages d'erreur plus spécifiques
+      let errorMessage = 'Erreur lors du pointage';
+      
+      if (error.message?.includes('GPS') || error.message?.includes('géolocalisation')) {
+        errorMessage = error.message;
+      } else if (error.message?.includes('Permission denied')) {
+        errorMessage = 'Permission de géolocalisation refusée. Veuillez autoriser l\'accès à votre position.';
+      } else if (error.message?.includes('Position unavailable')) {
+        errorMessage = 'Position GPS non disponible. Vérifiez que le GPS est activé.';
+      } else if (error.message?.includes('Timeout')) {
+        errorMessage = 'Délai d\'attente dépassé pour obtenir votre position GPS.';
+      } else {
+        errorMessage = 'Erreur lors du pointage. Vérifiez votre connexion et réessayez.';
       }
-
-      fetchData(); // Recharger les données
-
-    } catch (error) {
-      toast.error('Erreur lors du pointage. Vérifiez que la géolocalisation est activée.');
+      
+      toast.error(errorMessage);
     } finally {
       setPointageLoading(false);
     }
@@ -221,7 +273,7 @@ export const PointagePage: React.FC = () => {
     
     switch (action) {
       case 'arrivee':
-        return false; // Déjà fait
+        return !todayPresence.heure_entree;
       case 'pause_entree':
         return todayPresence.heure_entree && !todayPresence.pause_entree;
       case 'pause_sortie':

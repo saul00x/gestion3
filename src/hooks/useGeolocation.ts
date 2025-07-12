@@ -13,9 +13,12 @@ export const useGeolocation = () => {
     setLoading(true);
     setError(null);
 
+    console.log('=== HOOK: Demande géolocalisation ===');
+    
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
         const errorMsg = 'La géolocalisation n\'est pas supportée par ce navigateur';
+        console.error('❌', errorMsg);
         setError(errorMsg);
         setLoading(false);
         reject(new Error(errorMsg));
@@ -24,6 +27,13 @@ export const useGeolocation = () => {
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          console.log('✅ HOOK: Position GPS obtenue:', {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: new Date(position.timestamp).toLocaleString()
+          });
+          
           setLoading(false);
           resolve({
             latitude: position.coords.latitude,
@@ -31,6 +41,7 @@ export const useGeolocation = () => {
           });
         },
         (error) => {
+          console.error('❌ HOOK: Erreur géolocalisation:', error);
           setLoading(false);
           let errorMsg = 'Erreur de géolocalisation';
           
@@ -51,14 +62,16 @@ export const useGeolocation = () => {
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
+          timeout: 20000,
+          maximumAge: 0
         }
       );
     });
   }, []);
 
   const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    console.log('Calcul distance entre:', { lat1, lon1 }, 'et', { lat2, lon2 });
+    
     const R = 6371e3; // Rayon de la Terre en mètres
     const φ1 = lat1 * Math.PI / 180;
     const φ2 = lat2 * Math.PI / 180;
@@ -70,7 +83,10 @@ export const useGeolocation = () => {
               Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    return R * c;
+    const distance = R * c;
+    console.log('Distance calculée:', Math.round(distance), 'mètres');
+    
+    return distance;
   }, []);
 
   return {
