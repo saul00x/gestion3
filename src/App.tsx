@@ -6,16 +6,23 @@ import { LoginPage } from './components/LoginPage';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AdminDashboard } from './components/admin/AdminDashboard';
-import { ProduitsPage } from './components/admin/ProduitsPage';
-import { StockManagementPage } from './components/admin/StockManagementPage';
 import { MagasinsPage } from './components/admin/MagasinsPage';
-import { FournisseursPage } from './components/admin/FournisseursPage';
 import { UtilisateursPage } from './components/admin/UtilisateursPage';
 import { PresencesPage } from './components/admin/PresencesPage';
 import { ParametresPage } from './components/admin/ParametresPage';
+import { ProduitsViewPage } from './components/admin/ProduitsViewPage';
+import { StockManagementPage } from './components/admin/StockManagementPage';
+import { ManagerDashboard } from './components/manager/ManagerDashboard';
+import { ManagerProduitsPage } from './components/manager/ManagerProduitsPage';
+import { ManagerStockPage } from './components/manager/ManagerStockPage';
+import { ManagerFournisseursPage } from './components/manager/ManagerFournisseursPage';
+import { ManagerPresencesPage } from './components/manager/ManagerPresencesPage';
+import { ManagerUtilisateursPage } from './components/manager/ManagerUtilisateursPage';
+import { PlanningPage } from './components/manager/PlanningPage';
 import { EmployeDashboard } from './components/employe/EmployeDashboard';
 import { StockPage } from './components/employe/StockPage';
 import { PointagePage } from './components/employe/PointagePage';
+import { PlanningViewPage } from './components/employe/PlanningViewPage';
 
 function App() {
   const { user, loading } = useAuth();
@@ -41,13 +48,31 @@ function App() {
                 <Layout>
                   <Routes>
                     <Route path="dashboard" element={<AdminDashboard />} />
-                    <Route path="produits" element={<ProduitsPage />} />
-                    <Route path="stocks" element={<StockManagementPage />} />
                     <Route path="magasins" element={<MagasinsPage />} />
-                    <Route path="fournisseurs" element={<FournisseursPage />} />
                     <Route path="utilisateurs" element={<UtilisateursPage />} />
+                    <Route path="produits" element={<ProduitsViewPage />} />
+                    <Route path="stocks" element={<StockManagementPage />} />
                     <Route path="presences" element={<PresencesPage />} />
                     <Route path="parametres" element={<ParametresPage />} />
+                  </Routes>
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/manager/*"
+            element={
+              <ProtectedRoute allowedRoles={['manager']}>
+                <Layout>
+                  <Routes>
+                    <Route path="dashboard" element={<ManagerDashboard />} />
+                    <Route path="produits" element={<ManagerProduitsPage />} />
+                    <Route path="stocks" element={<ManagerStockPage />} />
+                    <Route path="fournisseurs" element={<ManagerFournisseursPage />} />
+                    <Route path="presences" element={<ManagerPresencesPage />} />
+                    <Route path="utilisateurs" element={<ManagerUtilisateursPage />} />
+                    <Route path="planning" element={<PlanningPage />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>
@@ -63,6 +88,7 @@ function App() {
                     <Route path="dashboard" element={<EmployeDashboard />} />
                     <Route path="stock" element={<StockPage />} />
                     <Route path="pointage" element={<PointagePage />} />
+                    <Route path="planning" element={<PlanningViewPage />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>
@@ -75,6 +101,8 @@ function App() {
               user ? (
                 user.role === 'admin' ? (
                   <Navigate to="/admin/dashboard" replace />
+                ) : user.role === 'manager' ? (
+                  <Navigate to="/manager/dashboard" replace />
                 ) : (
                   <Navigate to="/employe/dashboard" replace />
                 )

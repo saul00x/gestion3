@@ -20,7 +20,7 @@ export const UtilisateursPage: React.FC = () => {
     nom: '',
     prenom: '',
     password: '',
-    role: 'employe' as 'admin' | 'employe',
+    role: 'employe' as 'admin' | 'manager' | 'employe',
     magasin: '',
     image: null as File | null
   });
@@ -459,31 +459,35 @@ export const UtilisateursPage: React.FC = () => {
                   <select
                     required
                     value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'employe' })}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'manager' | 'employe' })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="employe">Employé</option>
+                    <option value="manager">Manager</option>
                     <option value="admin">Administrateur</option>
                   </select>
                   <p className="text-sm text-gray-500 mt-1">
                     {formData.role === 'admin' 
                       ? 'Accès complet à toutes les fonctionnalités' 
+                      : formData.role === 'manager'
+                      ? 'Gestion complète de son magasin et de ses employés'
                       : 'Accès limité au pointage et gestion du stock de son magasin'
                     }
                   </p>
                 </div>
 
-                {formData.role === 'employe' && (
+                {(formData.role === 'employe' || formData.role === 'manager') && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Magasin assigné
+                      {formData.role === 'manager' ? 'Magasin à gérer' : 'Magasin assigné'}
                     </label>
                     <select
+                      required={formData.role === 'manager'}
                       value={formData.magasin}
                       onChange={(e) => setFormData({ ...formData, magasin: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="">Aucun magasin assigné</option>
+                      <option value="">{formData.role === 'manager' ? 'Sélectionner un magasin' : 'Aucun magasin assigné'}</option>
                       {magasins.map((magasin) => (
                         <option key={magasin.id} value={magasin.id}>
                           {magasin.nom}
@@ -491,7 +495,9 @@ export const UtilisateursPage: React.FC = () => {
                       ))}
                     </select>
                     <p className="text-sm text-gray-500 mt-1">
-                      L'employé ne pourra pointer que dans ce magasin
+                      {formData.role === 'manager' 
+                        ? 'Le manager aura la gestion complète de ce magasin'
+                        : 'L\'employé ne pourra pointer que dans ce magasin'}
                     </p>
                   </div>
                 )}

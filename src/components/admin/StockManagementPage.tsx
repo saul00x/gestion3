@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Edit, Trash2, Search, Package, AlertTriangle, Save, X } from 'lucide-react';
+import { Package, AlertTriangle, Eye } from 'lucide-react';
 import { stockService, productsService, storesService } from '../../services/api';
 import { Stock, Produit, Magasin } from '../../types';
-import { safeNumber, parseNumberInput, formatNumber } from '../../utils/numbers';
-import toast from 'react-hot-toast';
+import { safeNumber, formatNumber } from '../../utils/numbers';
 
 // Cache global pour persister les données entre les navigations
 const dataCache = {
@@ -24,13 +23,6 @@ export const StockManagementPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMagasin, setSelectedMagasin] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [editingStock, setEditingStock] = useState<Stock | null>(null);
-  const [formData, setFormData] = useState({
-    produit: '',
-    magasin: '',
-    quantite: 0
-  });
 
   const isMounted = useRef(true);
 
@@ -118,133 +110,12 @@ export const StockManagementPage: React.FC = () => {
       
     } catch (error) {
       console.error('❌ Erreur fetchData:', error);
-      if (isMounted.current) {
-        toast.error('Erreur lors du chargement des données');
-      }
     } finally {
       if (isMounted.current) {
         setLoading(false);
       }
     }
   }, [updateCache]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.produit || !formData.magasin) {
-      toast.error('Veuillez sélectionner un produit et un magasin');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const produitId = parseInt(formData.produit);
-      const magasinId = parseInt(formData.magasin);
-
-      const stockData = {
-        produit: produitId,
-        magasin: magasinId,
-        quantite: safeNumber(formData.quantite, 0)
-      };
-
-      if (editingStock) {
-        // Modification d'un stock existant
-        const updatedStock = await stockService.updateStock(editingStock.id, stockData);
-        
-        // Mettre à jour le stock dans l'état local et le cache
-        const updatedStocks = stocks.map(stock => 
-          stock.id === editingStock.id 
-            ? { ...updatedStock, quantite: safeNumber(updatedStock.quantite, 0), updatedAt: new Date(updatedStock.updated_at || new Date()) }
-            : stock
-        );
-        
-        setStocks(updatedStocks);
-        dataCache.stocks = updatedStocks; // Mettre à jour le cache
-        
-        toast.success('Stock modifié avec succès');
-      } else {
-        // Vérifier si le stock existe déjà
-        const existingStock = stocks.find(s => {
-          const sProduitId = parseInt(s.produit_id.toString());
-          const sMagasinId = parseInt(s.magasin_id.toString());
-          return sProduitId === produitId && sMagasinId === magasinId;
-        });
-
-        if (existingStock) {
-          toast.error('Un stock existe déjà pour ce produit dans ce magasin');
-          return;
-        }
-
-        // Créer le nouveau stock
-        const newStock = await stockService.createStock(stockData);
-        
-        // Ajouter le nouveau stock à l'état local et au cache
-        const processedNewStock = {
-          ...newStock,
-          quantite: safeNumber(newStock.quantite, 0),
-          updatedAt: new Date(newStock.updated_at || new Date())
-        };
-        
-        const updatedStocks = [...stocks, processedNewStock];
-        setStocks(updatedStocks);
-        dataCache.stocks = updatedStocks; // Mettre à jour le cache
-        
-        toast.success('Stock ajouté avec succès');
-      }
-
-      resetForm();
-      
-    } catch (error) {
-      console.error('❌ Erreur handleSubmit:', error);
-      toast.error('Erreur lors de la sauvegarde');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEdit = (stock: Stock) => {
-    setEditingStock(stock);
-    setFormData({
-      produit: stock.produit_id.toString(),
-      magasin: stock.magasin_id.toString(),
-      quantite: safeNumber(stock.quantite, 0)
-    });
-    setShowModal(true);
-  };
-
-  const handleDelete = async (stock: Stock) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce stock ?')) return;
-
-    try {
-      await stockService.deleteStock(stock.id);
-      
-      // Supprimer le stock de l'état local et du cache
-      const updatedStocks = stocks.filter(s => s.id !== stock.id);
-      setStocks(updatedStocks);
-      dataCache.stocks = updatedStocks; // Mettre à jour le cache
-      
-      toast.success('Stock supprimé avec succès');
-    } catch (error) {
-      console.error('❌ Erreur lors de la suppression:', error);
-      toast.error('Erreur lors de la suppression');
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      produit: '',
-      magasin: '',
-      quantite: 0
-    });
-    setEditingStock(null);
-    setShowModal(false);
-  };
-
-  const handleQuantiteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseNumberInput(e.target.value);
-    setFormData({ ...formData, quantite: value });
-  };
 
   const getStockWithDetails = useCallback(() => {
     return stocks.map(stock => {
@@ -282,29 +153,25 @@ export const StockManagementPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gestion des Stocks</h1>
-          <p className="text-gray-600 mt-1">Gérez les stocks de tous vos magasins</p>
+          <h1 className="text-3xl font-bold text-gray-900">Consultation des Stocks</h1>
+          <p className="text-gray-600 mt-1">Vue d'ensemble des stocks de tous vos magasins (lecture seule)</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
-        >
-          <Plus className="h-5 w-5" />
-          <span>Nouveau Stock</span>
-        </button>
+        <div className="flex items-center space-x-2 text-blue-600">
+          <Eye className="h-5 w-5" />
+          <span className="text-sm font-medium">Mode lecture seule</span>
+        </div>
       </div>
 
       {/* Filters */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <input
               type="text"
               placeholder="Rechercher un produit..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           <select
@@ -342,9 +209,6 @@ export const StockManagementPage: React.FC = () => {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Dernière MAJ
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
                 </th>
               </tr>
             </thead>
@@ -400,22 +264,6 @@ export const StockManagementPage: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {stock.updatedAt.toLocaleDateString('fr-FR')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
-                        <button
-                          onClick={() => handleEdit(stock)}
-                          className="text-blue-600 hover:text-blue-900 transition-colors duration-200"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(stock)}
-                          className="text-red-600 hover:text-red-900 transition-colors duration-200"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
                   </tr>
                 );
               })}
@@ -429,106 +277,23 @@ export const StockManagementPage: React.FC = () => {
           <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun stock trouvé</h3>
           <p className="text-gray-600">
-            {searchTerm || selectedMagasin ? 'Aucun stock ne correspond aux filtres sélectionnés.' : 'Commencez par ajouter votre premier stock.'}
+            {searchTerm || selectedMagasin ? 'Aucun stock ne correspond aux filtres sélectionnés.' : 'Aucun stock disponible.'}
           </p>
         </div>
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {editingStock ? 'Modifier le Stock' : 'Nouveau Stock'}
-                </h2>
-                <button
-                  onClick={resetForm}
-                  className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Produit *
-                  </label>
-                  <select
-                    required
-                    disabled={!!editingStock}
-                    value={formData.produit}
-                    onChange={(e) => setFormData({ ...formData, produit: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                  >
-                    <option value="">Sélectionner un produit</option>
-                    {produits.map((produit) => (
-                      <option key={produit.id} value={produit.id}>
-                        {produit.nom} - {produit.reference}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Magasin *
-                  </label>
-                  <select
-                    required
-                    disabled={!!editingStock}
-                    value={formData.magasin}
-                    onChange={(e) => setFormData({ ...formData, magasin: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                  >
-                    <option value="">Sélectionner un magasin</option>
-                    {magasins.map((magasin) => (
-                      <option key={magasin.id} value={magasin.id}>
-                        {magasin.nom}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Quantité *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={formData.quantite === 0 ? '' : formData.quantite}
-                    onChange={handleQuantiteChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="0"
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors duration-200 flex items-center space-x-2"
-                  >
-                    <Save className="h-4 w-4" />
-                    <span>{editingStock ? 'Modifier' : 'Ajouter'}</span>
-                  </button>
-                </div>
-              </form>
-            </div>
+      {/* Info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <div className="flex items-center">
+          <Eye className="h-6 w-6 text-blue-600 mr-3" />
+          <div>
+            <h3 className="text-lg font-medium text-blue-800">Mode consultation</h3>
+            <p className="text-blue-600 mt-1">
+              Vous consultez les stocks en mode lecture seule. La gestion des stocks est déléguée aux managers de chaque magasin.
+            </p>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

@@ -14,7 +14,9 @@ import {
   Boxes,
   MessageCircle,
   Bell,
-  User
+  User,
+  Calendar,
+  Eye
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { MessagingWidget } from './MessagingWidget';
@@ -40,22 +42,34 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const adminMenuItems = [
     { icon: BarChart3, label: 'Dashboard', path: '/admin/dashboard' },
-    { icon: Package, label: 'Produits', path: '/admin/produits' },
-    { icon: Boxes, label: 'Stocks', path: '/admin/stocks' },
     { icon: Store, label: 'Magasins', path: '/admin/magasins' },
-    { icon: Truck, label: 'Fournisseurs', path: '/admin/fournisseurs' },
     { icon: Users, label: 'Utilisateurs', path: '/admin/utilisateurs' },
+    { icon: Eye, label: 'Produits', path: '/admin/produits' },
+    { icon: Eye, label: 'Stocks', path: '/admin/stocks' },
     { icon: Clock, label: 'Présences', path: '/admin/presences' },
     { icon: Settings, label: 'Paramètres', path: '/admin/parametres' }
+  ];
+
+  const managerMenuItems = [
+    { icon: BarChart3, label: 'Dashboard', path: '/manager/dashboard' },
+    { icon: Package, label: 'Produits', path: '/manager/produits' },
+    { icon: Boxes, label: 'Stocks', path: '/manager/stocks' },
+    { icon: Truck, label: 'Fournisseurs', path: '/manager/fournisseurs' },
+    { icon: Users, label: 'Employés', path: '/manager/utilisateurs' },
+    { icon: Clock, label: 'Présences', path: '/manager/presences' },
+    { icon: Calendar, label: 'Planning', path: '/manager/planning' }
   ];
 
   const employeMenuItems = [
     { icon: BarChart3, label: 'Dashboard', path: '/employe/dashboard' },
     { icon: Package, label: 'Stock', path: '/employe/stock' },
-    { icon: Clock, label: 'Pointage', path: '/employe/pointage' }
+    { icon: Clock, label: 'Pointage', path: '/employe/pointage' },
+    { icon: Calendar, label: 'Planning', path: '/employe/planning' }
   ];
 
-  const menuItems = user?.role === 'admin' ? adminMenuItems : employeMenuItems;
+  const menuItems = user?.role === 'admin' ? adminMenuItems : 
+                   user?.role === 'manager' ? managerMenuItems : 
+                   employeMenuItems;
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -110,7 +124,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             
             {/* User info and notifications in top right */}
             <div className="flex items-center space-x-4">
-              {user?.role === 'admin' && <NotificationWidget />}
+              {user?.role === 'manager' && <NotificationWidget />}
               
               <div className="flex items-center space-x-3 bg-gray-50 rounded-lg px-3 py-2">
                 <div className="w-8 h-8 rounded-full overflow-hidden">
@@ -161,7 +175,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       )}
 
       {/* Messaging Widget */}
-      <MessagingWidget />
+      {user?.role !== 'admin' && <MessagingWidget />}
     </div>
   );
 };

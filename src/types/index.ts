@@ -3,7 +3,7 @@ export interface User {
   email: string;
   nom: string;
   prenom: string;
-  role: 'admin' | 'employe';
+  role: 'admin' | 'manager' | 'employe';
   magasin_id?: string;
   image_url?: string;
   createdAt: Date;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, X, Users, Bell, Minimize2, Maximize2 } from 'lucide-react';
+import { MessageCircle, Send, X, Users, Bell, User as UserIcon } from 'lucide-react';
 import { messagingService, authService } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { Message, User } from '../types';
@@ -7,7 +7,6 @@ import toast from 'react-hot-toast';
 
 export const MessagingInterface: React.FC = () => {
   const { user } = useAuth();
-  const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -16,7 +15,7 @@ export const MessagingInterface: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (user) {
+    if (user && user.role !== 'admin') {
       fetchUsers();
       fetchMessages();
     }
@@ -29,18 +28,35 @@ export const MessagingInterface: React.FC = () => {
   const fetchUsers = async () => {
     try {
       const usersData = await authService.getUsers();
-      const filteredUsers = usersData
-        .filter((u: any) => u.id !== user?.id)
-        .map((item: any) => ({
-          ...item,
-          createdAt: new Date(item.date_joined)
-        }));
+      let filteredUsers: User[] = [];
 
-      if (user?.role === 'admin') {
-        setUsers(filteredUsers.filter((u: any) => u.role === 'employe'));
-      } else {
-        setUsers(filteredUsers.filter((u: any) => u.role === 'admin'));
+      if (user?.role === 'manager') {
+        // Manager peut parler avec ses employés et les admins
+        filteredUsers = usersData
+          .filter((u: any) => 
+            (u.role === 'employe' && u.magasin_id === user.magasin_id) ||
+            u.role === 'admin'
+          )
+          .filter((u: any) => u.id !== user.id)
+          .map((item: any) => ({
+            ...item,
+            createdAt: new Date(item.date_joined)
+          }));
+      } else if (user?.role === 'employe') {
+        // Employé peut parler avec les admins et son manager
+        filteredUsers = usersData
+          .filter((u: any) => 
+            u.role === 'admin' ||
+            (u.role === 'manager' && u.magasin_id === user.magasin_id)
+          )
+          .filter((u: any) => u.id !== user.id)
+          .map((item: any) => ({
+            ...item,
+            createdAt: new Date(item.date_joined)
+          }));
       }
+
+      setUsers(filteredUsers);
     } catch (error) {
       console.error('Erreur lors du chargement des utilisateurs:', error);
     }
@@ -121,188 +137,159 @@ export const MessagingInterface: React.FC = () => {
     ).length;
   };
 
-  if (!user) return null;
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'admin': return 'Administrateur';
+      case 'manager': return 'Manager';
+      case 'employe': return 'Employé';
+      default: return role;
+    }
+  };
+
+  if (!user || user.role === 'admin') return null;
 
   return (
-    <>
-      {/* Floating Button */}
-      {!isOpen && (
-        <button
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors duration-200 z-50"
-        >
-          <MessageCircle className="h-6 w-6" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center animate-pulse">
-              {unreadCount}
-            </span>
-          )}
-        </button>
-      )}
-
-      {/* Full Screen Messaging Interface */}
-      {isOpen && (
-        <div className="fixed inset-0 bg-white z-50 flex flex-col">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-blue-600 text-white">
-            <div className="flex items-center space-x-3">
-              <MessageCircle className="h-6 w-6" />
-              <h1 className="text-xl font-semibold">Messagerie</h1>
-              {unreadCount > 0 && (
-                <span className="bg-red-500 text-white text-sm rounded-full px-2 py-1">
-                  {unreadCount} nouveau{unreadCount > 1 ? 'x' : ''}
-                </span>
-              )}
+    <div className="flex flex-col h-full">
+      <div className="flex flex-1 overflow-hidden">
+        {/* Users List */}
+        <div className="w-1/3 border-r border-gray-200 overflow-y-auto bg-gray-50">
+          <div className="p-4">
+            <div className="flex items-center space-x-2 mb-4 text-sm text-gray-600">
+              <Users className="h-4 w-4" />
+              <span>
+                {user.role === 'manager' ? 'Employés & Admins' : 'Managers & Admins'}
+              </span>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="text-white hover:text-gray-200 transition-colors duration-200"
-            >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
-
-          <div className="flex flex-1 overflow-hidden">
-            {/* Users List */}
-            <div className="w-1/3 border-r border-gray-200 overflow-y-auto bg-gray-50">
-              <div className="p-4">
-                <div className="flex items-center space-x-2 mb-4 text-sm text-gray-600">
-                  <Users className="h-4 w-4" />
-                  <span>
-                    {user.role === 'admin' ? 'Employés' : 'Administrateurs'}
-                  </span>
-                </div>
-                {users.map((u) => {
-                  const userUnreadCount = getUserUnreadCount(u.id);
-                  return (
-                    <button
-                      key={u.id}
-                      onClick={() => handleUserSelect(u)}
-                      className={`w-full text-left p-4 rounded-lg hover:bg-white transition-colors duration-200 relative mb-2 ${
-                        selectedUser?.id === u.id ? 'bg-white border-l-4 border-blue-500 shadow-sm' : ''
-                      }`}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-                          <span className="text-white font-medium">
-                            {u.email.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 truncate">
-                            {u.email}
-                          </div>
-                          <div className="text-sm text-gray-500 capitalize">
-                            {u.role}
-                          </div>
-                        </div>
-                        {userUnreadCount > 0 && (
-                          <span className="bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center">
-                            {userUnreadCount}
-                          </span>
-                        )}
+            {users.map((u) => {
+              const userUnreadCount = getUserUnreadCount(u.id);
+              return (
+                <button
+                  key={u.id}
+                  onClick={() => handleUserSelect(u)}
+                  className={`w-full text-left p-3 rounded-lg hover:bg-white transition-colors duration-200 relative mb-2 ${
+                    selectedUser?.id === u.id ? 'bg-white border-l-4 border-blue-500 shadow-sm' : ''
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                      <span className="text-white font-medium text-xs">
+                        {u.prenom?.charAt(0)?.toUpperCase() || u.email.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 truncate text-sm">
+                        {u.prenom && u.nom ? `${u.prenom} ${u.nom}` : u.email}
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Chat Area */}
-            <div className="flex-1 flex flex-col">
-              {selectedUser ? (
-                <>
-                  {/* Chat Header */}
-                  <div className="p-4 border-b border-gray-200 bg-white">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-                        <span className="text-white font-medium">
-                          {selectedUser.email.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <h2 className="font-semibold text-gray-900">{selectedUser.email}</h2>
-                        <p className="text-sm text-gray-500 capitalize">{selectedUser.role}</p>
+                      <div className="text-xs text-gray-500">
+                        {getRoleLabel(u.role)}
                       </div>
                     </div>
-                  </div>
-
-                  {/* Messages */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-                    {getConversationMessages().length === 0 ? (
-                      <div className="text-center text-gray-500 mt-20">
-                        <MessageCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                        <p className="text-lg">Aucun message</p>
-                        <p>Commencez la conversation !</p>
-                      </div>
-                    ) : (
-                      getConversationMessages().map((message) => (
-                        <div
-                          key={message.id}
-                          className={`flex ${
-                            message.sender_id === user.id ? 'justify-end' : 'justify-start'
-                          }`}
-                        >
-                          <div
-                            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                              message.sender_id === user.id
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-white text-gray-900 border border-gray-200'
-                            }`}
-                          >
-                            <p className="text-sm">{message.content}</p>
-                            <p className={`text-xs mt-1 ${
-                              message.sender_id === user.id ? 'text-blue-100' : 'text-gray-500'
-                            }`}>
-                              {message.timestamp.toLocaleString('fr-FR', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                day: '2-digit',
-                                month: '2-digit'
-                              })}
-                            </p>
-                          </div>
-                        </div>
-                      ))
+                    {userUnreadCount > 0 && (
+                      <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {userUnreadCount}
+                      </span>
                     )}
-                    <div ref={messagesEndRef} />
                   </div>
-
-                  {/* Message Input */}
-                  <div className="p-4 border-t border-gray-200 bg-white">
-                    <div className="flex space-x-3">
-                      <input
-                        type="text"
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                        placeholder="Tapez votre message..."
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      <button
-                        onClick={sendMessage}
-                        disabled={!newMessage.trim()}
-                        className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center space-x-2"
-                      >
-                        <Send className="h-4 w-4" />
-                        <span>Envoyer</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="flex-1 flex items-center justify-center text-gray-500 bg-gray-50">
-                  <div className="text-center">
-                    <MessageCircle className="h-16 w-16 mx-auto mb-4" />
-                    <p className="text-lg">Sélectionnez un utilisateur</p>
-                    <p>pour commencer à discuter</p>
-                  </div>
-                </div>
-              )}
-            </div>
+                </button>
+              );
+            })}
           </div>
         </div>
-      )}
-    </>
+
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col">
+          {selectedUser ? (
+            <>
+              {/* Chat Header */}
+              <div className="p-3 border-b border-gray-200 bg-white">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                    <span className="text-white font-medium text-xs">
+                      {selectedUser.prenom?.charAt(0)?.toUpperCase() || selectedUser.email.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <h2 className="font-semibold text-gray-900 text-sm">
+                      {selectedUser.prenom && selectedUser.nom ? `${selectedUser.prenom} ${selectedUser.nom}` : selectedUser.email}
+                    </h2>
+                    <p className="text-xs text-gray-500">{getRoleLabel(selectedUser.role)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50">
+                {getConversationMessages().length === 0 ? (
+                  <div className="text-center text-gray-500 mt-8">
+                    <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm">Aucun message</p>
+                    <p className="text-xs">Commencez la conversation !</p>
+                  </div>
+                ) : (
+                  getConversationMessages().map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${
+                        message.sender_id === user.id ? 'justify-end' : 'justify-start'
+                      }`}
+                    >
+                      <div
+                        className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                          message.sender_id === user.id
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white text-gray-900 border border-gray-200'
+                        }`}
+                      >
+                        <p>{message.content}</p>
+                        <p className={`text-xs mt-1 ${
+                          message.sender_id === user.id ? 'text-blue-100' : 'text-gray-500'
+                        }`}>
+                          {message.timestamp.toLocaleString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            day: '2-digit',
+                            month: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Message Input */}
+              <div className="p-3 border-t border-gray-200 bg-white">
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                    placeholder="Tapez votre message..."
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <button
+                    onClick={sendMessage}
+                    disabled={!newMessage.trim()}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center space-x-1"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-gray-500 bg-gray-50">
+              <div className="text-center">
+                <MessageCircle className="h-12 w-12 mx-auto mb-3" />
+                <p className="text-sm">Sélectionnez un utilisateur</p>
+                <p className="text-xs">pour commencer à discuter</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };

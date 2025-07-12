@@ -4,13 +4,13 @@ import { User } from '../types';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: ('admin' | 'employe')[];
+  allowedRoles?: ('admin' | 'manager' | 'employe')[];
   redirectTo?: string;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   children, 
-  allowedRoles = ['admin', 'employe'] 
+  allowedRoles = ['admin', 'manager', 'employe'] 
 }) => {
   const { user, loading } = useAuth();
 

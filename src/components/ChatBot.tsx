@@ -22,6 +22,12 @@ interface SystemStats {
 
 export const ChatBot: React.FC = () => {
   const { user } = useAuth();
+  
+  // Ne pas afficher le ChatBot pour les admins
+  if (!user || user.role === 'admin') {
+    return null;
+  }
+  
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
