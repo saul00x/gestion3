@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Produit, Fournisseur } from '../../types';
 import { ImageUpload } from '../ImageUpload';
 import { DatasetImport } from './DatasetImport';
+import { DatasetImport } from './DatasetImport';
 import toast from 'react-hot-toast';
 
 export const ManagerProduitsPage: React.FC = () => {
@@ -16,6 +17,7 @@ export const ManagerProduitsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showDatasetImport, setShowDatasetImport] = useState(false);
   const [showDatasetImport, setShowDatasetImport] = useState(false);
   const [editingProduit, setEditingProduit] = useState<Produit | null>(null);
   const [formData, setFormData] = useState({
@@ -214,6 +216,13 @@ export const ManagerProduitsPage: React.FC = () => {
           >
             <Plus className="h-5 w-5" />
             <span>Nouveau Produit</span>
+          </button>
+          <button
+            onClick={() => setShowDatasetImport(true)}
+            className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center space-x-2"
+          >
+            <Upload className="h-5 w-5" />
+            <span>Importer Dataset</span>
           </button>
           <button
             onClick={() => setShowDatasetImport(true)}
@@ -469,6 +478,16 @@ export const ManagerProduitsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Dataset Import Modal */}
+      <DatasetImport
+        isOpen={showDatasetImport}
+        onClose={() => setShowDatasetImport(false)}
+        onSuccess={() => {
+          fetchProduits();
+          fetchFournisseurs();
+        }}
+      />
 
       {/* Dataset Import Modal */}
       <DatasetImport
