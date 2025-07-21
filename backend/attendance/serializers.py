@@ -67,6 +67,12 @@ class PresenceSerializer(serializers.ModelSerializer):
         print(f"✅ Présence créée dans serializer: {result.id}")
         
         return result
+
+
+
+        if request and request.user.is_authenticated:
+            validated_data['created_by'] = request.user
+        return super().create(validated_data)
     
     def update(self, instance, validated_data):
         print(f"=== SERIALIZER UPDATE ===")

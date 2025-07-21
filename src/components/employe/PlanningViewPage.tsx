@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { planningService } from '../../services/api';
 
 interface Planning {
   id: string;
@@ -31,43 +32,30 @@ export const PlanningViewPage: React.FC = () => {
   }, [selectedWeek]);
 
   const fetchPlannings = async () => {
+    setLoading(true);
     try {
-      // Simuler des données de planning pour l'employé connecté
-      const mockPlannings: Planning[] = [
-        {
-          id: '1',
-          user_id: user?.id || '1',
-          date: new Date(selectedWeek),
-          heure_debut: '09:00',
-          heure_fin: '17:00',
-          tache: 'Gestion du stock',
-          notes: 'Inventaire des produits électroniques'
-        },
-        {
-          id: '2',
-          user_id: user?.id || '1',
-          date: new Date(new Date(selectedWeek).getTime() + 24 * 60 * 60 * 1000), // Mardi
-          heure_debut: '10:00',
-          heure_fin: '18:00',
-          tache: 'Accueil client',
-          notes: 'Formation sur les nouveaux produits'
-        },
-        {
-          id: '3',
-          user_id: user?.id || '1',
-          date: new Date(new Date(selectedWeek).getTime() + 2 * 24 * 60 * 60 * 1000), // Mercredi
-          heure_debut: '08:00',
-          heure_fin: '16:00',
-          tache: 'Réception marchandises',
-          notes: 'Livraison importante prévue'
-        }
-      ];
-      
-      // Filtrer les plannings pour l'utilisateur connecté
-      const userPlannings = mockPlannings.filter(p => p.user_id === user?.id);
-      setPlannings(userPlannings);
+      if (!user?.id) {
+        setPlannings([]);
+        setLoading(false);
+        return;
+      }
+      const weekStart = new Date(selectedWeek);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const params = {
+        user: user.id,
+        date__gte: weekStart.toISOString().split('T')[0],
+        date__lte: weekEnd.toISOString().split('T')[0],
+      };
+      const apiPlannings = await planningService.getPlannings(params);
+      setPlannings(apiPlannings.map((p: any) => ({
+        ...p,
+        user_id: p.user,
+        date: new Date(p.date)
+      })));
     } catch (error) {
       console.error('Erreur lors du chargement du planning:', error);
+      setPlannings([]);
     } finally {
       setLoading(false);
     }

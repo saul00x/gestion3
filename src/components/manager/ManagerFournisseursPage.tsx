@@ -5,6 +5,18 @@ import { Fournisseur } from '../../types';
 import { ImageUpload } from '../ImageUpload';
 import toast from 'react-hot-toast';
 
+// Fonction pour normaliser la réponse API (à définir selon votre structure)
+const normalizeApiResponse = (data: any) => {
+  // Adaptez cette fonction selon la structure de votre API
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (data && data.results) {
+    return data.results;
+  }
+  return data || [];
+};
+
 export const ManagerFournisseursPage: React.FC = () => {
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,19 +30,55 @@ export const ManagerFournisseursPage: React.FC = () => {
     image: null as File | null
   });
 
+  // Récupération des infos utilisateur depuis localStorage ou context
+  const getUserInfo = () => {
+    try {
+      const userInfo = localStorage.getItem('user_info');
+      if (userInfo) {
+        return JSON.parse(userInfo);
+      }
+      return null;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des infos utilisateur:', error);
+      return null;
+    }
+  };
+
+  const user = getUserInfo();
+
   useEffect(() => {
     fetchFournisseurs();
   }, []);
 
   const fetchFournisseurs = async () => {
     try {
+      setLoading(true);
+      console.log('Début de la récupération des fournisseurs...');
+      
       const data = await suppliersService.getSuppliers();
-      setFournisseurs(data.map((item: any) => ({
-        ...item,
-        createdAt: new Date(item.created_at)
-      })));
+      console.log('Données reçues:', data);
+      
+      const normalizedData = normalizeApiResponse(data);
+      console.log('Données normalisées:', normalizedData);
+      
+      const formattedFournisseurs = normalizedData.map((item: any) => ({
+        id: item.id,
+        nom: item.nom || '',
+        adresse: item.adresse || '',
+        contact: item.contact || '',
+        image_url: item.image_url || item.image || null,
+        magasin: item.magasin || null,
+        createdAt: item.created_at ? new Date(item.created_at) : new Date(),
+        ...item
+      }));
+      
+      setFournisseurs(formattedFournisseurs);
+      console.log('Fournisseurs formatés:', formattedFournisseurs);
+      
     } catch (error) {
-      toast.error('Erreur lors du chargement des fournisseurs');
+      console.error('Erreur complète:', error);
+      toast.error(`Erreur lors du chargement des fournisseurs: ${error.message}`);
+      setFournisseurs([]); // Définir un tableau vide en cas d'erreur
     } finally {
       setLoading(false);
     }
@@ -38,28 +86,50 @@ export const ManagerFournisseursPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation des champs requis
+    if (!formData.nom.trim()) {
+      toast.error('Le nom du fournisseur est requis');
+      return;
+    }
+    if (!formData.adresse.trim()) {
+      toast.error('L\'adresse est requise');
+      return;
+    }
+    if (!formData.contact.trim()) {
+      toast.error('Le contact est requis');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const fournisseurData = {
-        nom: formData.nom,
-        adresse: formData.adresse,
-        contact: formData.contact,
+        nom: formData.nom.trim(),
+        adresse: formData.adresse.trim(),
+        contact: formData.contact.trim(),
+        magasin: user?.magasin_id || user?.magasin || null,
         image: formData.image
       };
 
+      console.log('Données à envoyer:', fournisseurData);
+
+      let response;
       if (editingFournisseur) {
-        await suppliersService.updateSupplier(editingFournisseur.id, fournisseurData);
+        response = await suppliersService.updateSupplier(editingFournisseur.id, fournisseurData);
         toast.success('Fournisseur modifié avec succès');
       } else {
-        await suppliersService.createSupplier(fournisseurData);
+        response = await suppliersService.createSupplier(fournisseurData);
         toast.success('Fournisseur ajouté avec succès');
       }
 
+      console.log('Réponse API:', response);
       resetForm();
-      fetchFournisseurs();
+      await fetchFournisseurs(); // Attendre la recharge des données
+      
     } catch (error) {
-      toast.error('Erreur lors de la sauvegarde');
+      console.error('Erreur lors de la sauvegarde:', error);
+      toast.error(`Erreur lors de la sauvegarde: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -68,9 +138,9 @@ export const ManagerFournisseursPage: React.FC = () => {
   const handleEdit = (fournisseur: Fournisseur) => {
     setEditingFournisseur(fournisseur);
     setFormData({
-      nom: fournisseur.nom,
-      adresse: fournisseur.adresse,
-      contact: fournisseur.contact,
+      nom: fournisseur.nom || '',
+      adresse: fournisseur.adresse || '',
+      contact: fournisseur.contact || '',
       image: null
     });
     setShowModal(true);
@@ -80,11 +150,15 @@ export const ManagerFournisseursPage: React.FC = () => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce fournisseur ?')) return;
 
     try {
+      setLoading(true);
       await suppliersService.deleteSupplier(fournisseur.id);
       toast.success('Fournisseur supprimé avec succès');
-      fetchFournisseurs();
+      await fetchFournisseurs();
     } catch (error) {
-      toast.error('Erreur lors de la suppression');
+      console.error('Erreur lors de la suppression:', error);
+      toast.error(`Erreur lors de la suppression: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -99,10 +173,17 @@ export const ManagerFournisseursPage: React.FC = () => {
     setShowModal(false);
   };
 
-  const filteredFournisseurs = fournisseurs.filter(fournisseur =>
-    fournisseur.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    fournisseur.contact.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filtrage sécurisé
+  const filteredFournisseurs = fournisseurs.filter(fournisseur => {
+    if (!fournisseur) return false;
+    
+    const nom = fournisseur.nom || '';
+    const contact = fournisseur.contact || '';
+    const searchLower = searchTerm.toLowerCase();
+    
+    return nom.toLowerCase().includes(searchLower) ||
+           contact.toLowerCase().includes(searchLower);
+  });
 
   if (loading && fournisseurs.length === 0) {
     return (
@@ -154,6 +235,10 @@ export const ManagerFournisseursPage: React.FC = () => {
                   src={`http://localhost:8000${fournisseur.image_url}`}
                   alt={fournisseur.nom}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    console.error('Erreur chargement image:', fournisseur.image_url);
+                    e.currentTarget.style.display = 'none';
+                  }}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
@@ -184,7 +269,9 @@ export const ManagerFournisseursPage: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 text-lg">{fournisseur.nom}</h3>
-                  <p className="text-sm text-gray-600">Créé le {fournisseur.createdAt.toLocaleDateString('fr-FR')}</p>
+                  <p className="text-sm text-gray-600">
+                    Créé le {fournisseur.createdAt ? fournisseur.createdAt.toLocaleDateString('fr-FR') : 'N/A'}
+                  </p>
                 </div>
               </div>
 
@@ -204,7 +291,7 @@ export const ManagerFournisseursPage: React.FC = () => {
         ))}
       </div>
 
-      {filteredFournisseurs.length === 0 && (
+      {filteredFournisseurs.length === 0 && !loading && (
         <div className="text-center py-12">
           <Truck className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun fournisseur trouvé</h3>
@@ -293,7 +380,7 @@ export const ManagerFournisseursPage: React.FC = () => {
                     className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors duration-200 flex items-center space-x-2"
                   >
                     <Save className="h-4 w-4" />
-                    <span>{editingFournisseur ? 'Modifier' : 'Ajouter'}</span>
+                    <span>{loading ? 'Traitement...' : (editingFournisseur ? 'Modifier' : 'Ajouter')}</span>
                   </button>
                 </div>
               </form>

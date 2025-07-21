@@ -3,7 +3,7 @@ import { Send, Bot, User } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { productsService, authService, stockService, storesService, suppliersService } from '../services/api';
 import { normalizeApiResponse } from '../config/api';
-
+//yes
 interface ChatMessage {
   id: string;
   content: string;

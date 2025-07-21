@@ -158,6 +158,13 @@ export const PointagePage: React.FC = () => {
       return;
     }
 
+    // Si c'est un départ et qu'il y a une pause en cours, la terminer automatiquement
+    if (type === 'depart' && todayPresence?.pause_entree && !todayPresence?.pause_sortie) {
+      console.log('🔄 Fin automatique de la pause lors du départ');
+      // Terminer la pause d'abord
+      await handlePointage('pause_sortie');
+      // Puis continuer avec le départ
+    }
     setPointageLoading(true);
 
     try {

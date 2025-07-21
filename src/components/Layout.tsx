@@ -44,8 +44,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { icon: BarChart3, label: 'Dashboard', path: '/admin/dashboard' },
     { icon: Store, label: 'Magasins', path: '/admin/magasins' },
     { icon: Users, label: 'Utilisateurs', path: '/admin/utilisateurs' },
-    { icon: Eye, label: 'Produits', path: '/admin/produits' },
-    { icon: Eye, label: 'Stocks', path: '/admin/stocks' },
+    { icon: Boxes, label: 'Stocks', path: '/admin/stocks' },
     { icon: Clock, label: 'Présences', path: '/admin/presences' },
     { icon: Settings, label: 'Paramètres', path: '/admin/parametres' }
   ];

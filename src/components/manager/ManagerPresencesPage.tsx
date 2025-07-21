@@ -11,9 +11,11 @@ import toast from 'react-hot-toast';
 export const ManagerPresencesPage: React.FC = () => {
   const { user } = useAuth();
   const [presences, setPresences] = useState<Presence[]>([]);
+  const [allPresences, setAllPresences] = useState<Presence[]>([]);
   const [users, setUsers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showAll, setShowAll] = useState(false);
   const [selectedUser, setSelectedUser] = useState('');
 
   const findUserById = (userId: string) => {
@@ -42,81 +44,210 @@ export const ManagerPresencesPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    loadInitialData();
+  }, [user]);
 
   useEffect(() => {
-    fetchPresences();
-  }, [selectedDate, selectedUser]);
+    if (users.length > 0 && allPresences.length > 0) {
+      filterPresences();
+    }
+  }, [selectedDate, selectedUser, users, allPresences, showAll]);
 
-  const fetchData = async () => {
-    try {
-      const usersData = await authService.getUsers();
-      const normalizedUsers = normalizeApiResponse(usersData);
-      
-      // Filtrer les employés du magasin du manager
-      const employesDuMagasin = normalizedUsers
-        .filter((u: any) => u.role === 'employe' && u.magasin_id === user?.magasin_id)
+  const loadInitialData = async () => {
+  // === DEBUG APPROFONDI ===
+  console.log('🔍 DEBUG APPROFONDI USER:');
+  console.log('- user:', user);
+  console.log('- user?.magasin_id:', user?.magasin_id);
+  console.log('- typeof user?.magasin_id:', typeof user?.magasin_id);
+  console.log('- user?.magasin_id === null:', user?.magasin_id === null);
+  console.log('- user?.magasin_id === undefined:', user?.magasin_id === undefined);
+  console.log('- user?.magasin_id === "":', user?.magasin_id === '');
+  console.log('- user?.magasin_id === 0:', user?.magasin_id === 0);
+  console.log('- Boolean(user?.magasin_id):', Boolean(user?.magasin_id));
+  console.log('- !!user?.magasin_id:', !!user?.magasin_id);
+  
+  // Vérifier toutes les propriétés du user
+  if (user) {
+    console.log('📋 Propriétés du user:');
+    Object.keys(user).forEach(key => {
+      console.log(`  - ${key}:`, user[key], `(${typeof user[key]})`);
+    });
+  }
+
+  // === CONDITION CORRIGÉE ===
+  const magasinId = user?.magasin_id || user?.magasin || user?.store_id;
+  
+  if (!magasinId && magasinId !== 0) { // Permettre 0 comme ID valide
+    console.error('❌ Manager sans magasin_id:', user);
+    console.error('🔍 Propriétés testées:', {
+      magasin_id: user?.magasin_id,
+      magasin: user?.magasin,
+      store_id: user?.store_id
+    });
+    
+    // Ne pas bloquer complètement - essayer quand même de charger
+    console.warn('⚠️ Tentative de chargement sans filtrage par magasin');
+    // toast.error('Erreur: Manager sans magasin assigné');
+    // setLoading(false);
+    // return;
+  }
+
+  try {
+    setLoading(true);
+    console.log('🏪 Chargement des données pour le manager, magasin_id:', magasinId);
+    
+    // Charger les utilisateurs d'abord
+    console.log('👥 Chargement des utilisateurs...');
+    const usersData = await authService.getUsers();
+    console.log('✅ Utilisateurs reçus:', usersData);
+    
+    const normalizedUsers = normalizeApiResponse(usersData);
+    console.log('✅ Utilisateurs normalisés:', normalizedUsers.length);
+    
+    // Si on a un magasin_id, filtrer les employés
+    let employesDuMagasin;
+    if (magasinId || magasinId === 0) {
+      employesDuMagasin = normalizedUsers
+        .filter((u: any) => {
+          const isEmployee = u.role === 'employe';
+          const sameStore = u.magasin_id?.toString() === magasinId?.toString();
+          
+          console.log(`👤 User ${u.email}: role=${u.role}, magasin_id=${u.magasin_id}, match=${isEmployee && sameStore}`);
+          
+          return isEmployee && sameStore;
+        })
         .map((item: any) => ({
           ...item,
           id: item.id?.toString(),
           createdAt: new Date(item.date_joined || item.created_at)
         }));
-      
-      setUsers(employesDuMagasin);
-      console.log('Employés du magasin chargés:', employesDuMagasin.length);
-    } catch (error) {
-      console.error('Erreur lors du chargement des données:', error);
-      toast.error('Erreur lors du chargement des données');
-    }
-  };
-
-  const fetchPresences = async () => {
-    setLoading(true);
-    try {
-      const data = await attendanceService.getAttendance();
-      const normalizedData = normalizeApiResponse(data);
-      
-      // Filtrer les présences des employés du magasin
-      let presencesData = normalizedData
-        .filter((item: any) => {
-          const presenceUserId = item.user_id?.toString();
-          return users.some(u => u.id?.toString() === presenceUserId);
-        })
+    } else {
+      // Si pas de magasin_id, prendre tous les employés
+      console.warn('⚠️ Aucun magasin_id - chargement de tous les employés');
+      employesDuMagasin = normalizedUsers
+        .filter((u: any) => u.role === 'employe')
         .map((item: any) => ({
           ...item,
           id: item.id?.toString(),
-          user_id: item.user_id?.toString(),
-          magasin_id: item.magasin_id?.toString(),
-          date_pointage: new Date(item.date_pointage),
-          heure_entree: item.heure_entree ? new Date(item.heure_entree) : null,
-          heure_sortie: item.heure_sortie ? new Date(item.heure_sortie) : null,
-          pause_entree: item.pause_entree ? new Date(item.pause_entree) : null,
-          pause_sortie: item.pause_sortie ? new Date(item.pause_sortie) : null
-        })) as Presence[];
-
-      // Filtrer par date
-      if (selectedDate) {
-        const filterDate = new Date(selectedDate);
-        presencesData = presencesData.filter(presence => {
-          const presenceDate = presence.date_pointage;
-          return presenceDate.toDateString() === filterDate.toDateString();
-        });
-      }
-
-      // Filtrer par utilisateur
-      if (selectedUser) {
-        presencesData = presencesData.filter(presence => presence.user_id === selectedUser);
-      }
-
-      setPresences(presencesData);
-      
-    } catch (error) {
-      console.error('Erreur lors du chargement des présences:', error);
-      toast.error('Erreur lors du chargement des présences');
-    } finally {
-      setLoading(false);
+          createdAt: new Date(item.date_joined || item.created_at)
+        }));
     }
+    
+    console.log('👥 Employés trouvés:', employesDuMagasin.length);
+    employesDuMagasin.forEach(emp => {
+      console.log(`  - ${emp.prenom} ${emp.nom} (${emp.email}) - ID: ${emp.id} - Magasin: ${emp.magasin_id}`);
+    });
+    
+    setUsers(employesDuMagasin);
+    
+    // Charger les présences
+    console.log('📊 Chargement des présences...');
+    
+    // Essayer plusieurs approches pour récupérer les présences
+    let presencesData = [];
+    
+    // 1. Essayer avec l'API normale
+    try {
+      console.log('🔍 Tentative 1: API normale');
+      const normalData = await attendanceService.getAttendance({ magasin_id: magasinId });
+      console.log('✅ Présences API normale:', normalData.length);
+      presencesData = normalData;
+    } catch (error) {
+      console.warn('⚠️ Erreur API normale:', error);
+    }
+    
+    // 2. Si échec, essayer requête directe
+    if (presencesData.length === 0) {
+      try {
+        console.log('🔍 Tentative 2: Requête directe');
+        const response = await fetch('http://localhost:8000/api/attendance/presences/', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (response.ok) {
+          const directData = await response.json();
+          console.log('✅ Présences requête directe:', directData);
+          presencesData = normalizeApiResponse(directData);
+        } else {
+          console.error('❌ Erreur requête directe:', response.status, response.statusText);
+        }
+      } catch (error) {
+        console.error('❌ Erreur requête directe:', error);
+      }
+    }
+    
+    // Formater les présences
+    const formattedPresences = presencesData.map((item: any) => ({
+      ...item,
+      id: item.id?.toString(),
+      user_id: item.user_id?.toString(),
+      magasin_id: item.magasin_id?.toString(),
+      date_pointage: new Date(item.date_pointage),
+      heure_entree: item.heure_entree ? new Date(item.heure_entree) : null,
+      heure_sortie: item.heure_sortie ? new Date(item.heure_sortie) : null,
+      pause_entree: item.pause_entree ? new Date(item.pause_entree) : null,
+      pause_sortie: item.pause_sortie ? new Date(item.pause_sortie) : null
+    })) as Presence[];
+    
+    console.log('📊 Présences formatées:', formattedPresences.length);
+    setAllPresences(formattedPresences);
+    
+  } catch (error) {
+    console.error('❌ Erreur lors du chargement des données:', error);
+    toast.error(`Erreur lors du chargement des données: ${error.message}`);
+  } finally {
+    setLoading(false);
+  }
+};
+  const filterPresences = () => {
+    if (!users.length || !allPresences.length) return;
+    
+    console.log('Filtrage des présences...');
+    console.log('Users disponibles:', users.length);
+    console.log('Présences totales:', allPresences.length);
+    
+    // Créer une liste des IDs des employés du magasin
+    const employeeIds = users.map(u => u.id?.toString()).filter(Boolean);
+    console.log('IDs des employés du magasin:', employeeIds);
+    
+    // Filtrer les présences des employés du magasin
+    let filteredPresences = allPresences.filter(presence => {
+      const presenceUserId = presence.user_id?.toString();
+      const isEmployeePresence = employeeIds.includes(presenceUserId);
+      
+      if (!isEmployeePresence) {
+        console.log(`Présence ignorée - user_id: ${presenceUserId} pas dans les employés du magasin`);
+      }
+      
+      return isEmployeePresence;
+    });
+    
+    console.log('Présences après filtrage par magasin:', filteredPresences.length);
+    
+    // Filtrer par date (sauf si showAll)
+    if (selectedDate && !showAll) {
+      const filterDate = new Date(selectedDate);
+      filteredPresences = filteredPresences.filter(presence => {
+        const presenceDate = presence.date_pointage;
+        const isSameDate = presenceDate.toDateString() === filterDate.toDateString();
+        return isSameDate;
+      });
+      console.log('Présences après filtrage par date:', filteredPresences.length);
+    }
+
+    // Filtrer par utilisateur
+    if (selectedUser) {
+      filteredPresences = filteredPresences.filter(presence => 
+        presence.user_id?.toString() === selectedUser
+      );
+      console.log('Présences après filtrage par utilisateur:', filteredPresences.length);
+    }
+
+    console.log('Présences finales à afficher:', filteredPresences.length);
+    setPresences(filteredPresences);
   };
 
   const exportToCSV = () => {
@@ -287,13 +418,41 @@ export const ManagerPresencesPage: React.FC = () => {
     return `${hours}h ${mins}min`;
   };
 
+  // Debug info
+  const debugInfo = () => {
+    console.log('=== DEBUG INFO ===');
+    console.log('Manager user:', user);
+    console.log('Users loaded:', users.length);
+    console.log('All presences:', allPresences.length);
+    console.log('Filtered presences:', presences.length);
+    console.log('Selected date:', selectedDate);
+    console.log('Selected user:', selectedUser);
+  };
+
+  // Appeler le debug quand on clique sur le titre
+  const handleTitleClick = () => {
+    debugInfo();
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Présences des Employés</h1>
-          <p className="text-gray-600 mt-1">Consultez l'historique des pointages de vos employés</p>
+          <h1 
+            className="text-3xl font-bold text-gray-900 cursor-pointer"
+            onClick={handleTitleClick}
+          >
+            Présences des Employés
+          </h1>
+          <p className="text-gray-600 mt-1">
+            Consultez l'historique des pointages de vos employés
+            {user?.magasin_id && (
+              <span className="ml-2 text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                Magasin: {user.magasin_id}
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex space-x-3">
           <button
@@ -314,6 +473,7 @@ export const ManagerPresencesPage: React.FC = () => {
           </button>
         </div>
       </div>
+
 
       {/* Filters */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -337,7 +497,7 @@ export const ManagerPresencesPage: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Employé
+              Employé ({users.length} disponible{users.length > 1 ? 's' : ''})
             </label>
             <select
               value={selectedUser}
@@ -355,11 +515,38 @@ export const ManagerPresencesPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Bouton afficher tout l'historique */}
+      <div className="flex justify-end mb-4">
+        {showAll ? (
+          <button
+            className="px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+            onClick={() => { setShowAll(false); setSelectedDate(new Date().toISOString().split('T')[0]); }}
+          >
+            Afficher uniquement la date sélectionnée
+          </button>
+        ) : (
+          <button
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            onClick={() => { setShowAll(true); setSelectedDate(''); }}
+          >
+            Afficher tout l'historique
+          </button>
+        )}
+      </div>
+
       {/* Presences Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          </div>
+        ) : users.length === 0 ? (
+          <div className="text-center py-12">
+            <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun employé trouvé</h3>
+            <p className="text-gray-600">
+              Aucun employé n'est assigné à votre magasin (ID: {user?.magasin_id || 'Non défini'}).
+            </p>
           </div>
         ) : presences.length > 0 ? (
           <div className="overflow-x-auto">

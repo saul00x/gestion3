@@ -65,9 +65,18 @@ export const MessagingWidget: React.FC = () => {
 
 
       if (user?.role === 'admin') {
-        setUsers(filteredUsers.filter((u: any) => u.role === 'employe'));
+        // Admin peut parler avec tout le monde
+        setUsers(filteredUsers);
+      } else if (user?.role === 'manager') {
+        // Manager peut parler avec les employés de son magasin seulement
+        setUsers(filteredUsers.filter((u: any) => 
+          u.role === 'employe' && u.magasin_id === user.magasin_id
+        ));
       } else {
-        setUsers(filteredUsers.filter((u: any) => u.role === 'admin'));
+        // Employé peut parler avec les managers de son magasin seulement
+        setUsers(filteredUsers.filter((u: any) => 
+          u.role === 'manager' && u.magasin_id === user.magasin_id
+        ));
       }
     } catch (error) {
       console.error('Erreur lors du chargement des utilisateurs:', error);

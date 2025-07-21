@@ -14,8 +14,11 @@ export const LoginPage: React.FC = () => {
 
   React.useEffect(() => {
     if (user) {
+      // Redirection correcte selon le rôle
       if (user.role === 'admin') {
         navigate('/admin/dashboard');
+      } else if (user.role === 'manager') {
+        navigate('/manager/dashboard');
       } else {
         navigate('/employe/dashboard');
       }

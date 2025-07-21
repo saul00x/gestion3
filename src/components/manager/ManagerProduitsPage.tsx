@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Plus, Edit, Trash2, Search, Package, AlertTriangle, Save, X } from 'lucide-react';
 import { productsService, suppliersService, stockService } from '../../services/api';
 import { normalizeApiResponse } from '../../config/api';
@@ -21,40 +22,59 @@ export const ManagerProduitsPage: React.FC = () => {
     categorie: '',
     prix_unitaire: 0,
     seuil_alerte: 0,
+
     fournisseur: '',
     image: null as File | null
   });
 
+  // DEBUG : Afficher user à chaque rendu
   useEffect(() => {
-    fetchProduits();
-    fetchFournisseurs();
-  }, []);
+    console.log('[ManagerProduitsPage] user:', user);
+    if (user?.magasin_id) {
+      fetchProduits();
+      fetchFournisseurs();
+    }
+  }, [user]);
 
   const fetchProduits = async () => {
     try {
-      // Récupérer tous les produits
+      setLoading(true);
+      
+      // Récupérer les données depuis l'API directement
       const data = await productsService.getProducts();
       const normalizedData = normalizeApiResponse(data);
       
-      // Récupérer les stocks pour filtrer les produits du magasin
-      const stocksData = await stockService.getStocks();
-      const stocks = normalizeApiResponse(stocksData);
-      
-      // Filtrer les produits qui ont un stock dans le magasin du manager
-      const produitsAvecStock = normalizedData.filter((produit: any) => {
-        return stocks.some((stock: any) => 
-          stock.produit_id?.toString() === produit.id?.toString() &&
-          stock.magasin_id?.toString() === user?.magasin_id?.toString()
+      // Filtrer les produits du magasin du manager
+      const produitsMagasin = normalizedData.filter((item: any) => {
+        if (!user?.magasin_id) return false;
+        return (
+          item.magasin === user.magasin_id ||
+          item.magasin === user.magasin ||
+          item.magasin_id === user.magasin_id ||
+          item.magasin_id === user.magasin
         );
       });
-      
-      setProduits(produitsAvecStock.map((item: any) => ({
+
+      const formattedProduits = produitsMagasin.map((item: any) => ({
         ...item,
-        createdAt: new Date(item.created_at)
-      })));
+        createdAt: item.created_at ? new Date(item.created_at) : new Date(),
+        // S'assurer que tous les champs nécessaires sont présents
+        id: item.id,
+        nom: item.nom || '',
+        reference: item.reference || '',
+        categorie: item.categorie || '',
+        prix_unitaire: parseFloat(item.prix_unitaire) || 0,
+        seuil_alerte: parseInt(item.seuil_alerte) || 0,
+        fournisseur_id: item.fournisseur_id || item.fournisseur || null,
+        image_url: item.image_url || null
+      }));
+
+      setProduits(formattedProduits);
+      
     } catch (error) {
       console.error('Erreur lors du chargement des produits:', error);
       toast.error('Erreur lors du chargement des produits');
+      setProduits([]);
     } finally {
       setLoading(false);
     }
@@ -64,13 +84,22 @@ export const ManagerProduitsPage: React.FC = () => {
     try {
       const data = await suppliersService.getSuppliers();
       const normalizedData = normalizeApiResponse(data);
-      setFournisseurs(normalizedData.map((item: any) => ({
+      // Filtrer les fournisseurs selon le magasin du manager
+      const fournisseursMagasin = normalizedData.filter((item: any) => {
+        return item.magasin_id?.toString() === user?.magasin_id?.toString();
+      });
+      setFournisseurs(fournisseursMagasin.map((item: any) => ({
         ...item,
-        createdAt: new Date(item.created_at)
+        createdAt: item.created_at ? new Date(item.created_at) : new Date()
       })));
     } catch (error) {
       console.error('Erreur lors du chargement des fournisseurs:', error);
+      toast.error('Erreur lors du chargement des fournisseurs');
     }
+  };
+
+  const clearCache = () => {
+    // Fonction supprimée car on n'utilise plus le cache
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,13 +107,10 @@ export const ManagerProduitsPage: React.FC = () => {
     setLoading(true);
 
     try {
+      // Ajout du magasin du manager connecté
       const produitData = {
-        nom: formData.nom,
-        reference: formData.reference,
-        categorie: formData.categorie,
-        prix_unitaire: formData.prix_unitaire,
-        seuil_alerte: formData.seuil_alerte,
-        fournisseur: formData.fournisseur || null,
+        ...formData,
+        magasin: user?.magasin_id || user?.magasin,
         image: formData.image
       };
 
@@ -92,23 +118,20 @@ export const ManagerProduitsPage: React.FC = () => {
         await productsService.updateProduct(editingProduit.id, produitData);
         toast.success('Produit modifié avec succès');
       } else {
-        const newProduit = await productsService.createProduct(produitData);
-        
-        // Créer automatiquement un stock pour ce produit dans le magasin du manager
-        await stockService.createStock({
-          produit: newProduit.id,
-          magasin: user?.magasin_id,
-          quantite: 0
-        });
-        
+        await productsService.createProduct(produitData);
         toast.success('Produit ajouté avec succès');
       }
 
+      // Vider le cache pour forcer le refresh
+      clearCache();
       resetForm();
+      
+      // Recharger les données après ajout/modification
       await fetchProduits();
+      
     } catch (error: any) {
       console.error('Erreur lors de la sauvegarde:', error);
-      toast.error(error.message || 'Erreur lors de la sauvegarde');
+      toast.error('Erreur lors de la sauvegarde : ' + (error?.message || error));
     } finally {
       setLoading(false);
     }
@@ -117,11 +140,12 @@ export const ManagerProduitsPage: React.FC = () => {
   const handleEdit = (produit: Produit) => {
     setEditingProduit(produit);
     setFormData({
-      nom: produit.nom,
-      reference: produit.reference,
-      categorie: produit.categorie,
-      prix_unitaire: produit.prix_unitaire,
-      seuil_alerte: produit.seuil_alerte,
+      nom: produit.nom || '',
+      reference: produit.reference || '',
+      categorie: produit.categorie || '',
+      prix_unitaire: produit.prix_unitaire || 0,
+      seuil_alerte: produit.seuil_alerte || 0,
+  
       fournisseur: produit.fournisseur_id || '',
       image: null
     });
@@ -134,8 +158,12 @@ export const ManagerProduitsPage: React.FC = () => {
     try {
       await productsService.deleteProduct(produit.id);
       toast.success('Produit supprimé avec succès');
+      
+      // Recharger les données après suppression
       await fetchProduits();
+      
     } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
       toast.error('Erreur lors de la suppression');
     }
   };
@@ -147,6 +175,7 @@ export const ManagerProduitsPage: React.FC = () => {
       categorie: '',
       prix_unitaire: 0,
       seuil_alerte: 0,
+
       fournisseur: '',
       image: null
     });
@@ -155,9 +184,9 @@ export const ManagerProduitsPage: React.FC = () => {
   };
 
   const filteredProduits = Array.isArray(produits) ? produits.filter(produit =>
-    produit.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    produit.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    produit.categorie.toLowerCase().includes(searchTerm.toLowerCase())
+    (produit.nom || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (produit.reference || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (produit.categorie || '').toLowerCase().includes(searchTerm.toLowerCase())
   ) : [];
 
   if (loading && produits.length === 0) {
@@ -176,13 +205,15 @@ export const ManagerProduitsPage: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900">Gestion des Produits</h1>
           <p className="text-gray-600 mt-1">Gérez les produits de votre magasin</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
-        >
-          <Plus className="h-5 w-5" />
-          <span>Nouveau Produit</span>
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
+          >
+            <Plus className="h-5 w-5" />
+            <span>Nouveau Produit</span>
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -212,12 +243,16 @@ export const ManagerProduitsPage: React.FC = () => {
                     src={`http://localhost:8000${produit.image_url}`}
                     alt={produit.nom}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                    }}
                   />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Package className="h-16 w-16 text-gray-400" />
-                  </div>
-                )}
+                ) : null}
+                <div className={`w-full h-full flex items-center justify-center ${produit.image_url ? 'hidden' : ''}`}>
+                  <Package className="h-16 w-16 text-gray-400" />
+                </div>
+                
                 <div className="absolute top-2 right-2 flex space-x-1">
                   <button
                     onClick={() => handleEdit(produit)}
@@ -232,6 +267,7 @@ export const ManagerProduitsPage: React.FC = () => {
                     <Trash2 className="h-4 w-4 text-red-600" />
                   </button>
                 </div>
+                
                 {produit.seuil_alerte > 0 && (
                   <div className="absolute top-2 left-2">
                     <div className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium flex items-center">
@@ -256,9 +292,9 @@ export const ManagerProduitsPage: React.FC = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Prix:</span>
                     <span className="text-lg font-bold text-blue-600">
-                      {produit.prix_unitaire.toLocaleString('fr-FR', {
+                      {(produit.prix_unitaire || 0).toLocaleString('fr-FR', {
                         style: 'currency',
-                        currency: 'EUR'
+                        currency: 'MAD'
                       })}
                     </span>
                   </div>
@@ -281,7 +317,7 @@ export const ManagerProduitsPage: React.FC = () => {
         })}
       </div>
 
-      {filteredProduits.length === 0 && (
+      {filteredProduits.length === 0 && !loading && (
         <div className="text-center py-12">
           <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun produit trouvé</h3>
@@ -291,7 +327,7 @@ export const ManagerProduitsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal - Identique à l'admin mais adapté pour le manager */}
+      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -356,7 +392,7 @@ export const ManagerProduitsPage: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Prix unitaire (€) *
+                      Prix unitaire (MAD) *
                     </label>
                     <input
                       type="number"
@@ -364,7 +400,7 @@ export const ManagerProduitsPage: React.FC = () => {
                       min="0"
                       required
                       value={formData.prix_unitaire}
-                      onChange={(e) => setFormData({ ...formData, prix_unitaire: parseFloat(e.target.value) })}
+                      onChange={(e) => setFormData({ ...formData, prix_unitaire: parseFloat(e.target.value) || 0 })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
@@ -377,10 +413,11 @@ export const ManagerProduitsPage: React.FC = () => {
                       type="number"
                       min="0"
                       value={formData.seuil_alerte}
-                      onChange={(e) => setFormData({ ...formData, seuil_alerte: parseInt(e.target.value) })}
+                      onChange={(e) => setFormData({ ...formData, seuil_alerte: parseInt(e.target.value) || 0 })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
+
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">

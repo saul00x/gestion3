@@ -9,7 +9,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ProduitListCreateView(generics.ListCreateAPIView):
-    queryset = Produit.objects.all()
     serializer_class = ProduitSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -17,18 +16,22 @@ class ProduitListCreateView(generics.ListCreateAPIView):
     search_fields = ['nom', 'reference', 'categorie']
     ordering_fields = ['nom', 'prix_unitaire', 'created_at']
     ordering = ['-created_at']
-    
-    def create(self, request, *args, **kwargs):
-        try:
-            logger.info(f"Création de produit: {request.data.get('nom')}")
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            produit = serializer.save()
-            logger.info(f"Produit créé avec succès: {produit.nom}")
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            logger.error(f"Erreur lors de la création du produit: {str(e)}")
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Produit.objects.all()
+        # Si le user est rattaché à un magasin (manager), filtrer
+        if hasattr(user, 'magasin') and user.magasin is not None and not user.is_superuser:
+            return qs.filter(magasin=user.magasin)
+        return qs
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        magasin = None
+        if hasattr(user, 'magasin') and user.magasin is not None and not user.is_superuser:
+            magasin = user.magasin
+        serializer.save(magasin=magasin)
+
 
 class ProduitDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Produit.objects.all()

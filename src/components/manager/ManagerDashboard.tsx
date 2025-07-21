@@ -6,9 +6,22 @@ import { normalizeApiResponse } from '../../config/api';
 import { useAuth } from '../../hooks/useAuth';
 import { Produit, Stock, User } from '../../types';
 import { safeNumber } from '../../utils/numbers';
+import ManagerNotifications from './ManagerNotifications';
+
+// Fonction pour formater les nombres
+const formatNumber = (num: number): string => {
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  }
+  return num.toString();
+};
 
 export const ManagerDashboard: React.FC = () => {
   const { user } = useAuth();
+  const [magasinNom, setMagasinNom] = useState<string>('');
   const [stats, setStats] = useState({
     totalProduits: 0,
     totalEmployes: 0,
@@ -35,12 +48,19 @@ export const ManagerDashboard: React.FC = () => {
       const results = await Promise.allSettled([
         productsService.getProducts(),
         authService.getUsers(),
-        stockService.getStocks()
+        stockService.getStocks(),
+        storesService.getStores()
       ]);
 
       const produitsResponse = results[0].status === 'fulfilled' ? results[0].value : [];
       const utilisateursResponse = results[1].status === 'fulfilled' ? results[1].value : [];
       const stocksResponse = results[2].status === 'fulfilled' ? results[2].value : [];
+      const magasinsResponse = results[3].status === 'fulfilled' ? results[3].value : [];
+
+      // Récupérer le nom du magasin
+      const magasins = normalizeApiResponse(magasinsResponse || []);
+      const currentMagasin = magasins.find((m: any) => m.id.toString() === user.magasin_id?.toString());
+      setMagasinNom(currentMagasin?.nom || 'Magasin inconnu');
 
       const produits = normalizeApiResponse(produitsResponse || []).map((item: any) => ({
         ...item,
@@ -163,7 +183,10 @@ export const ManagerDashboard: React.FC = () => {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard Manager</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard Manager</h1>
+          <p className="text-lg text-blue-600 font-medium mt-1">Magasin: {magasinNom}</p>
+        </div>
         <div className="text-sm text-gray-500">
           Dernière mise à jour: {new Date().toLocaleString('fr-FR')}
         </div>
@@ -178,7 +201,7 @@ export const ManagerDashboard: React.FC = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Produits en stock</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalProduits}</p>
+              <p className="text-2xl font-bold text-gray-900">{formatNumber(stats.totalProduits)}</p>
             </div>
           </div>
         </div>
@@ -190,7 +213,7 @@ export const ManagerDashboard: React.FC = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Employés</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalEmployes}</p>
+              <p className="text-2xl font-bold text-gray-900">{formatNumber(stats.totalEmployes)}</p>
             </div>
           </div>
         </div>
@@ -202,7 +225,7 @@ export const ManagerDashboard: React.FC = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Alertes Stock</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.alertesStock}</p>
+              <p className="text-2xl font-bold text-gray-900">{formatNumber(stats.alertesStock)}</p>
             </div>
           </div>
         </div>
@@ -215,10 +238,7 @@ export const ManagerDashboard: React.FC = () => {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Valeur Stock</p>
               <p className="text-2xl font-bold text-gray-900">
-                {stats.valeurTotaleStock.toLocaleString('fr-FR', {
-                  style: 'currency',
-                  currency: 'EUR'
-                })}
+                {formatNumber(stats.valeurTotaleStock)} MAD
               </p>
             </div>
           </div>
@@ -244,7 +264,7 @@ export const ManagerDashboard: React.FC = () => {
                 />
                 <YAxis />
                 <Tooltip 
-                  formatter={(value) => [value, 'Quantité']}
+                  formatter={(value) => [formatNumber(Number(value)), 'Quantité']}
                   labelFormatter={(label) => `Catégorie: ${label}`}
                 />
                 <Bar dataKey="quantite" fill="#3B82F6" />
@@ -279,7 +299,7 @@ export const ManagerDashboard: React.FC = () => {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => [value, 'Quantité']} />
+                <Tooltip formatter={(value) => [formatNumber(Number(value)), 'Quantité']} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
@@ -292,23 +312,6 @@ export const ManagerDashboard: React.FC = () => {
           )}
         </div>
       </div>
-
-      {/* Alertes */}
-      {stats.alertesStock > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <div className="flex items-center">
-            <AlertTriangle className="h-6 w-6 text-red-600 mr-3" />
-            <div>
-              <h3 className="text-lg font-medium text-red-800">
-                Attention: {stats.alertesStock} produit{stats.alertesStock > 1 ? 's' : ''} en rupture de stock
-              </h3>
-              <p className="text-red-600 mt-1">
-                Certains produits ont atteint leur seuil d'alerte. Vérifiez la section Stock pour plus de détails.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

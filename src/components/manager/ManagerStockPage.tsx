@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Edit, Trash2, Search, Package, AlertTriangle, Save, X } from 'lucide-react';
+import { Search, Package, AlertTriangle, Plus, Edit, Trash2 } from 'lucide-react';
 import { stockService, productsService } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import { Stock, Produit } from '../../types';
-import { safeNumber, parseNumberInput, formatNumber } from '../../utils/numbers';
+import { safeNumber, formatNumber } from '../../utils/numbers';
 import toast from 'react-hot-toast';
 
 export const ManagerStockPage: React.FC = () => {
@@ -12,11 +12,54 @@ export const ManagerStockPage: React.FC = () => {
   const [produits, setProduits] = useState<Produit[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [editingStock, setEditingStock] = useState<Stock | null>(null);
-  const [formData, setFormData] = useState({
-    produit: '',
-    quantite: 0
+
+  // Ajout état pour la modale d'ajout de stock
+  const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [addStockForm, setAddStockForm] = useState({ produitId: '', quantite: 0 });
+
+  // Liste des produits sans stock dans ce magasin
+  const produitsSansStock = produits.filter(p => !stocks.some(s => s.produit_id === p.id));
+
+  // Handlers d'action pour la colonne Actions
+  const handleEditStock = (stock: Stock) => {
+    // TODO: ouvrir une modale d'édition ou autre logique
+    toast('Fonction éditer à implémenter');
+  };
+  const handleDeleteStock = (stock: Stock) => {
+    // TODO: ajouter confirmation et suppression réelle
+    toast('Fonction supprimer à implémenter');
+  };
+
+  // Handler pour la soumission du formulaire d'ajout de stock
+  const handleAddStockSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.magasin_id || !addStockForm.produitId || addStockForm.quantite <= 0) return;
+    try {
+      setLoading(true);
+      await stockService.createStock({
+        produit: addStockForm.produitId,
+        magasin: user.magasin_id,
+        quantite: addStockForm.quantite
+      });
+      toast.success('Stock créé avec succès');
+      setShowAddStockModal(false);
+      setAddStockForm({ produitId: '', quantite: 0 });
+      fetchData();
+    } catch (error) {
+      toast.error('Erreur lors de la création du stock');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  const [showMouvementModal, setShowMouvementModal] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
+  const [mouvementData, setMouvementData] = useState({
+    type: 'entrée' as 'entrée' | 'sortie',
+    quantite: 0,
+    motif: '',
+    
   });
 
   const isMounted = useRef(true);
@@ -79,110 +122,55 @@ export const ManagerStockPage: React.FC = () => {
     }
   }, [user?.magasin_id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.produit) {
-      toast.error('Veuillez sélectionner un produit');
+  const handleMouvement = async (stock: Stock) => {
+    setSelectedStock(stock);
+    setShowMouvementModal(true);
+  };
+
+  // Dans ManagerStockPage.tsx - Remplace la fonction submitMouvement
+
+const submitMouvement = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!selectedStock || !user) return;
+
+  try {
+    // Calculer la nouvelle quantité
+    const nouvelleQuantite = mouvementData.type === 'entrée' 
+      ? selectedStock.quantite + mouvementData.quantite
+      : selectedStock.quantite - mouvementData.quantite;
+
+    if (nouvelleQuantite < 0) {
+      toast.error('Quantité insuffisante en stock');
       return;
     }
 
-    setLoading(true);
+    // Préparer les données en JSON (pas FormData)
+    const movementPayload = {
+      produit: selectedStock.produit_id,
+      magasin: selectedStock.magasin_id,
+      type: mouvementData.type,
+      quantite: mouvementData.quantite,
+      motif: mouvementData.motif
+    };
 
-    try {
-      const produitId = parseInt(formData.produit);
-      const magasinId = parseInt(user?.magasin_id || '0');
+    console.log('Données envoyées:', movementPayload); // Pour déboguer
 
-      const stockData = {
-        produit: produitId,
-        magasin: magasinId,
-        quantite: safeNumber(formData.quantite, 0)
-      };
+    await stockService.createMovement(movementPayload);
+    toast.success('Mouvement enregistré');
+    setShowMouvementModal(false);
+    setSelectedStock(null);
+    setMouvementData({ type: 'entrée', quantite: 0, motif: '' });
+    fetchData();
+  } catch (error: any) {
+    console.error('Erreur détaillée:', error);
+    toast.error("Erreur lors de l'enregistrement du mouvement");
+  }
+};
 
-      if (editingStock) {
-        const updatedStock = await stockService.updateStock(editingStock.id, stockData);
-        
-        const updatedStocks = stocks.map(stock => 
-          stock.id === editingStock.id 
-            ? { ...updatedStock, quantite: safeNumber(updatedStock.quantite, 0), updatedAt: new Date(updatedStock.updated_at || new Date()) }
-            : stock
-        );
-        
-        setStocks(updatedStocks);
-        toast.success('Stock modifié avec succès');
-      } else {
-        // Vérifier si le stock existe déjà
-        const existingStock = stocks.find(s => {
-          const sProduitId = parseInt(s.produit_id.toString());
-          return sProduitId === produitId;
-        });
-
-        if (existingStock) {
-          toast.error('Un stock existe déjà pour ce produit dans ce magasin');
-          return;
-        }
-
-        const newStock = await stockService.createStock(stockData);
-        
-        const processedNewStock = {
-          ...newStock,
-          quantite: safeNumber(newStock.quantite, 0),
-          updatedAt: new Date(newStock.updated_at || new Date())
-        };
-        
-        const updatedStocks = [...stocks, processedNewStock];
-        setStocks(updatedStocks);
-        
-        toast.success('Stock ajouté avec succès');
-      }
-
-      resetForm();
-      
-    } catch (error) {
-      console.error('❌ Erreur handleSubmit:', error);
-      toast.error('Erreur lors de la sauvegarde');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEdit = (stock: Stock) => {
-    setEditingStock(stock);
-    setFormData({
-      produit: stock.produit_id.toString(),
-      quantite: safeNumber(stock.quantite, 0)
-    });
-    setShowModal(true);
-  };
-
-  const handleDelete = async (stock: Stock) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce stock ?')) return;
-
-    try {
-      await stockService.deleteStock(stock.id);
-      
-      const updatedStocks = stocks.filter(s => s.id !== stock.id);
-      setStocks(updatedStocks);
-      
-      toast.success('Stock supprimé avec succès');
-    } catch (error) {
-      console.error('❌ Erreur lors de la suppression:', error);
-      toast.error('Erreur lors de la suppression');
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      produit: '',
-      quantite: 0
-    });
-    setEditingStock(null);
-    setShowModal(false);
-  };
-
-  const handleQuantiteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseNumberInput(e.target.value);
-    setFormData({ ...formData, quantite: value });
+  const resetMouvementForm = () => {
+    setShowMouvementModal(false);
+    setSelectedStock(null);
+    setMouvementData({ type: 'entrée', quantite: 0, motif: '' });
   };
 
   const getStockWithDetails = useCallback(() => {
@@ -203,11 +191,6 @@ export const ManagerStockPage: React.FC = () => {
     return matchesSearch;
   });
 
-  // Produits disponibles pour création (qui n'ont pas encore de stock)
-  const availableProducts = produits.filter(produit => {
-    return !stocks.some(stock => stock.produit_id.toString() === produit.id.toString());
-  });
-
   if (loading && stocks.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -224,14 +207,78 @@ export const ManagerStockPage: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900">Gestion des Stocks</h1>
           <p className="text-gray-600 mt-1">Gérez les stocks de votre magasin</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
-        >
-          <Plus className="h-5 w-5" />
-          <span>Nouveau Stock</span>
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setShowAddStockModal(true)}
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
+          >
+            <Plus className="h-5 w-5" />
+            <span>Ajouter un stock</span>
+          </button>
+        </div>
       </div>
+
+      {/* Modal d'ajout de stock */}
+      {showAddStockModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Ajouter un stock</h2>
+                <button
+                  onClick={() => { setShowAddStockModal(false); setAddStockForm({ produitId: '', quantite: 0 }); }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                >
+                  ×
+                </button>
+              </div>
+              <form onSubmit={handleAddStockSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Produit</label>
+                  <select
+                    required
+                    value={addStockForm.produitId}
+                    onChange={e => setAddStockForm({ ...addStockForm, produitId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Sélectionner un produit</option>
+                    {produitsSansStock.map(produit => (
+                      <option key={produit.id} value={produit.id}>{produit.nom} (Réf: {produit.reference})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Quantité initiale</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={addStockForm.quantite > 0 ? addStockForm.quantite : ''}
+                    onChange={e => setAddStockForm({ ...addStockForm, quantite: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => { setShowAddStockModal(false); setAddStockForm({ produitId: '', quantite: 0 }); }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
+                  >
+                    <span>Créer</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Search */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -253,19 +300,19 @@ export const ManagerStockPage: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="w-2/5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Produit
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="w-1/5 px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Quantité
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="w-1/5 px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Statut
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="w-1/5 px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Dernière MAJ
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="w-1/5 px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -278,7 +325,7 @@ export const ManagerStockPage: React.FC = () => {
                 
                 return (
                   <tr key={stock.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="w-2/5 px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
                           {produit.image_url ? (
@@ -299,12 +346,12 @@ export const ManagerStockPage: React.FC = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="w-1/5 px-6 py-4 whitespace-nowrap text-center">
                       <span className={`text-lg font-bold ${isLowStock ? 'text-red-600' : 'text-green-600'}`}>
                         {formatNumber(safeNumber(stock.quantite, 0))}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="w-1/5 px-6 py-4 whitespace-nowrap text-center">
                       {isLowStock ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                           <AlertTriangle className="h-3 w-3 mr-1" />
@@ -316,22 +363,16 @@ export const ManagerStockPage: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="w-1/5 px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                       {stock.updatedAt.toLocaleDateString('fr-FR')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
+                    <td className="w-1/5 px-6 py-4 whitespace-nowrap text-center">
+                      <div className="flex justify-center">
                         <button
-                          onClick={() => handleEdit(stock)}
-                          className="text-blue-600 hover:text-blue-900 transition-colors duration-200"
+                          onClick={() => handleMouvement(stock)}
+                          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center space-x-2"
                         >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(stock)}
-                          className="text-red-600 hover:text-red-900 transition-colors duration-200"
-                        >
-                          <Trash2 className="h-4 w-4" />
+                          <span>Saisir mouvement</span>
                         </button>
                       </div>
                     </td>
@@ -353,91 +394,124 @@ export const ManagerStockPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal */}
-      {showModal && (
+      {/* Modal Mouvement */}
+      {showMouvementModal && selectedStock && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {editingStock ? 'Modifier le Stock' : 'Nouveau Stock'}
-                </h2>
+                <h2 className="text-xl font-bold text-gray-900">Saisir un mouvement</h2>
                 <button
-                  onClick={resetForm}
+                  onClick={resetMouvementForm}
                   className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
                 >
-                  <X className="h-6 w-6" />
+                  ×
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="mb-4">
+                <p className="text-sm text-gray-600">Produit:</p>
+                <p className="font-medium text-gray-900">
+                  {produits.find(p => p.id === selectedStock.produit_id)?.nom}
+                </p>
+                <p className="text-sm text-gray-500">
+                  Stock actuel: {selectedStock.quantite}
+                </p>
+              </div>
+
+              <form onSubmit={submitMouvement} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Produit *
+                    Type de mouvement
+                  </label>
+                  <div className="flex space-x-4 mb-2">
+                    <button
+                      type="button"
+                      className={`px-4 py-2 rounded-lg font-semibold border transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 ${mouvementData.type === 'entrée' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-green-700 border-green-600 hover:bg-green-50'}`}
+                      onClick={() => setMouvementData({ ...mouvementData, type: 'entrée' })}
+                    >
+                      Entrée
+                    </button>
+                    <button
+                      type="button"
+                      className={`px-4 py-2 rounded-lg font-semibold border transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 ${mouvementData.type === 'sortie' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-700 border-red-600 hover:bg-red-50'}`}
+                      onClick={() => setMouvementData({ ...mouvementData, type: 'sortie' })}
+                    >
+                      Sortie
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Quantité
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={isNaN(mouvementData.quantite) || mouvementData.quantite <= 0 ? '' : mouvementData.quantite}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setMouvementData({ ...mouvementData, quantite: isNaN(val) ? 0 : val });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Motif
                   </label>
                   <select
                     required
-                    disabled={!!editingStock}
-                    value={formData.produit}
-                    onChange={(e) => setFormData({ ...formData, produit: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                    value={mouvementData.motif}
+                    onChange={(e) => setMouvementData({ ...mouvementData, motif: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value="">Sélectionner un produit</option>
-                    {editingStock ? (
-                      // Si on modifie, afficher le produit actuel
-                      produits.filter(p => p.id.toString() === editingStock.produit_id.toString()).map((produit) => (
-                        <option key={produit.id} value={produit.id}>
-                          {produit.nom} - {produit.reference}
-                        </option>
-                      ))
+                    <option value="">Sélectionner un motif</option>
+                    {mouvementData.type === 'entrée' ? (
+                      <>
+                        <option value="livraison">Livraison fournisseur</option>
+                        <option value="retour">Retour client</option>
+                        <option value="transfert_entrant">Transfert entrant</option>
+                        <option value="correction">Correction d'inventaire</option>
+                      </>
                     ) : (
-                      // Si on crée, afficher les produits disponibles
-                      availableProducts.map((produit) => (
-                        <option key={produit.id} value={produit.id}>
-                          {produit.nom} - {produit.reference}
-                        </option>
-                      ))
+                      <>
+                        <option value="vente">Vente</option>
+                        <option value="casse">Casse/Perte</option>
+                        <option value="transfert_sortant">Transfert sortant</option>
+                        <option value="retour_fournisseur">Retour fournisseur</option>
+                        <option value="correction">Correction d'inventaire</option>
+                      </>
                     )}
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Quantité *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={formData.quantite === 0 ? '' : formData.quantite}
-                    onChange={handleQuantiteChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="0"
-                  />
-                </div>
+                
 
                 <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
                   <button
                     type="button"
-                    onClick={resetForm}
+                    onClick={resetMouvementForm}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
                   >
                     Annuler
                   </button>
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors duration-200 flex items-center space-x-2"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
                   >
-                    <Save className="h-4 w-4" />
-                    <span>{editingStock ? 'Modifier' : 'Ajouter'}</span>
+                    <span>Enregistrer</span>
                   </button>
                 </div>
-              </form>
+                </form>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
     </div>
   );
 };

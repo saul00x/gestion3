@@ -12,7 +12,7 @@ SECRET_KEY = 'nup5PBtT0LB9iGryQmQVY_Oluj_OEeuyqY6dABkgqQmflCCozNlXogfWLLo6DArR8D
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
+ALLOWED_HOSTS = ['localhost','192.168.11.131','127.0.0.1', '0.0.0.0']
 
 # Application definition
 INSTALLED_APPS = [
@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'suppliers',
     'stock',
     'attendance',
+    'planning',
     'messaging',
 ]
 
@@ -179,10 +180,11 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://192.168.11.131:5173",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True
 
 # Custom user model
 AUTH_USER_MODEL = 'accounts.User'

@@ -169,6 +169,10 @@ export const productsService = {
       formData.append('fournisseur', productData.fournisseur);
     }
     
+    if (productData.magasin) {
+      formData.append('magasin', productData.magasin);
+    }
+    
     if (productData.image) {
       formData.append('image', productData.image);
     }
@@ -199,6 +203,10 @@ export const productsService = {
     
     if (productData.fournisseur) {
       formData.append('fournisseur', productData.fournisseur);
+    }
+    
+    if (productData.magasin) {
+      formData.append('magasin', productData.magasin);
     }
     
     if (productData.image) {
@@ -297,73 +305,285 @@ export const storesService = {
 };
 
 // Suppliers Services
+// Suppliers Services
 export const suppliersService = {
   getSuppliers: async () => {
     try {
       console.log('Récupération des fournisseurs...');
-      const response = await apiRequest(endpoints.suppliers);
-      console.log('Fournisseurs API response:', response);
-      return normalizeApiResponse(response);
+      
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        throw new Error('Token d\'authentification manquant');
+      }
+
+      const response = await fetch('http://localhost:8000/api/suppliers/', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🟥 Erreur HTTP récupération fournisseurs:', response.status, errorText);
+        
+        if (response.status === 401) {
+          throw new Error('Session expirée. Veuillez vous reconnecter.');
+        }
+        
+        let errorData = {};
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: errorText };
+        }
+        
+        throw new Error(errorData.error || errorData.message || `Erreur HTTP: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Fournisseurs API response:', data);
+      return data;
+      
     } catch (error) {
       console.error('Erreur lors de la récupération des fournisseurs:', error);
       throw error;
     }
   },
-  
-  createSupplier: (supplierData: any) => {
-    const formData = new FormData();
-    
-    formData.append('nom', supplierData.nom);
-    formData.append('adresse', supplierData.adresse);
-    formData.append('contact', supplierData.contact);
-    
-    if (supplierData.image) {
-      formData.append('image', supplierData.image);
-    }
-    
-    return fetch(`http://localhost:8000/api/suppliers/`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-      },
-      body: formData,
-    }).then(async response => {
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || `Erreur HTTP: ${response.status}`);
+
+  createSupplier: async (supplierData: any) => {
+    try {
+      console.log('Création d\'un nouveau fournisseur:', supplierData);
+      
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        throw new Error('Token d\'authentification manquant');
       }
-      return response.json();
-    });
-  },
-  
-  updateSupplier: (id: string, supplierData: any) => {
-    const formData = new FormData();
-    
-    formData.append('nom', supplierData.nom);
-    formData.append('adresse', supplierData.adresse);
-    formData.append('contact', supplierData.contact);
-    
-    if (supplierData.image) {
-      formData.append('image', supplierData.image);
-    }
-    
-    return fetch(`http://localhost:8000/api/suppliers/${id}/`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-      },
-      body: formData,
-    }).then(async response => {
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || `Erreur HTTP: ${response.status}`);
+
+      const formData = new FormData();
+      
+      // Validation des champs requis
+      if (!supplierData.nom || !supplierData.nom.trim()) {
+        throw new Error('Le nom du fournisseur est requis');
       }
-      return response.json();
-    });
+      if (!supplierData.adresse || !supplierData.adresse.trim()) {
+        throw new Error('L\'adresse est requise');
+      }
+      if (!supplierData.contact || !supplierData.contact.trim()) {
+        throw new Error('Le contact est requis');
+      }
+
+      formData.append('nom', supplierData.nom.trim());
+      formData.append('adresse', supplierData.adresse.trim());
+      formData.append('contact', supplierData.contact.trim());
+
+      // Ajout du magasin si disponible
+      if (supplierData.magasin) {
+        formData.append('magasin', supplierData.magasin.toString());
+      }
+
+      // Ajout de l'image si disponible
+      if (supplierData.image && supplierData.image instanceof File) {
+        formData.append('image', supplierData.image);
+      }
+
+      console.log('FormData préparée pour envoi');
+      
+      const response = await fetch('http://localhost:8000/api/suppliers/', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          // Ne pas définir Content-Type pour FormData, le navigateur le fait automatiquement
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🟥 Erreur HTTP création fournisseur:', response.status, errorText);
+        
+        if (response.status === 401) {
+          throw new Error('Session expirée. Veuillez vous reconnecter.');
+        }
+        
+        let errorData = {};
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: errorText };
+        }
+        
+        // Gestion des erreurs de validation Django
+        if (errorData.non_field_errors) {
+          throw new Error(errorData.non_field_errors[0]);
+        }
+        if (errorData.nom) {
+          throw new Error(`Nom: ${errorData.nom[0]}`);
+        }
+        if (errorData.adresse) {
+          throw new Error(`Adresse: ${errorData.adresse[0]}`);
+        }
+        if (errorData.contact) {
+          throw new Error(`Contact: ${errorData.contact[0]}`);
+        }
+        
+        throw new Error(errorData.error || errorData.message || errorData.detail || `Erreur HTTP: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Fournisseur créé avec succès:', result);
+      return result;
+      
+    } catch (error) {
+      console.error('Erreur lors de la création du fournisseur:', error);
+      throw error;
+    }
   },
-  
-  deleteSupplier: (id: string) =>
-    apiRequest(`${endpoints.suppliers}${id}/`, { method: 'DELETE' }),
+
+  updateSupplier: async (id: string, supplierData: any) => {
+    try {
+      console.log('Mise à jour du fournisseur:', id, supplierData);
+      
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        throw new Error('Token d\'authentification manquant');
+      }
+
+      const formData = new FormData();
+      
+      // Validation des champs requis
+      if (!supplierData.nom || !supplierData.nom.trim()) {
+        throw new Error('Le nom du fournisseur est requis');
+      }
+      if (!supplierData.adresse || !supplierData.adresse.trim()) {
+        throw new Error('L\'adresse est requise');
+      }
+      if (!supplierData.contact || !supplierData.contact.trim()) {
+        throw new Error('Le contact est requis');
+      }
+
+      formData.append('nom', supplierData.nom.trim());
+      formData.append('adresse', supplierData.adresse.trim());
+      formData.append('contact', supplierData.contact.trim());
+
+      // Ajout du magasin si disponible
+      if (supplierData.magasin) {
+        formData.append('magasin', supplierData.magasin.toString());
+      }
+
+      // Ajout de l'image si disponible
+      if (supplierData.image && supplierData.image instanceof File) {
+        formData.append('image', supplierData.image);
+      }
+
+      const response = await fetch(`http://localhost:8000/api/suppliers/${id}/`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          // Ne pas définir Content-Type pour FormData
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🟥 Erreur HTTP mise à jour fournisseur:', response.status, errorText);
+        
+        if (response.status === 401) {
+          throw new Error('Session expirée. Veuillez vous reconnecter.');
+        }
+        if (response.status === 404) {
+          throw new Error('Fournisseur non trouvé');
+        }
+        
+        let errorData = {};
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: errorText };
+        }
+        
+        // Gestion des erreurs de validation Django
+        if (errorData.non_field_errors) {
+          throw new Error(errorData.non_field_errors[0]);
+        }
+        if (errorData.nom) {
+          throw new Error(`Nom: ${errorData.nom[0]}`);
+        }
+        if (errorData.adresse) {
+          throw new Error(`Adresse: ${errorData.adresse[0]}`);
+        }
+        if (errorData.contact) {
+          throw new Error(`Contact: ${errorData.contact[0]}`);
+        }
+        
+        throw new Error(errorData.error || errorData.message || errorData.detail || `Erreur HTTP: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Fournisseur mis à jour avec succès:', result);
+      return result;
+      
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du fournisseur:', error);
+      throw error;
+    }
+  },
+
+  deleteSupplier: async (id: string) => {
+    try {
+      console.log('Suppression du fournisseur:', id);
+      
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        throw new Error('Token d\'authentification manquant');
+      }
+
+      const response = await fetch(`http://localhost:8000/api/suppliers/${id}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🟥 Erreur HTTP suppression fournisseur:', response.status, errorText);
+        
+        if (response.status === 401) {
+          throw new Error('Session expirée. Veuillez vous reconnecter.');
+        }
+        if (response.status === 404) {
+          throw new Error('Fournisseur non trouvé');
+        }
+        
+        let errorData = {};
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: errorText };
+        }
+        
+        throw new Error(errorData.error || errorData.message || errorData.detail || `Erreur HTTP: ${response.status}`);
+      }
+
+      // DELETE peut retourner 204 (No Content) ou 200 avec un JSON
+      if (response.status === 204) {
+        console.log('Fournisseur supprimé avec succès (204)');
+        return { success: true };
+      }
+
+      const result = await response.json();
+      console.log('Fournisseur supprimé avec succès:', result);
+      return result;
+      
+    } catch (error) {
+      console.error('Erreur lors de la suppression du fournisseur:', error);
+      throw error;
+    }
+  },
 };
 
 // Corrections pour stockService dans api.ts
@@ -498,38 +718,94 @@ export const stockService = {
     try {
       const response = await apiRequest(endpoints.movements, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(movementData),
       });
       return response;
     } catch (error) {
-      throw error;
-    }
-  },
-};
-// Attendance Services
-export const attendanceService = {
-  getAttendance: async () => {
-    try {
-      console.log('=== API: Récupération des présences ===');
-      const response = await apiRequest(endpoints.attendance);
-      console.log('✅ Présences reçues:', response.length || 0, 'éléments');
-      return normalizeApiResponse(response);
-    } catch (error) {
-      console.error('❌ Erreur récupération présences:', error);
+      console.error('Erreur API createMovement:', error);
       throw error;
     }
   },
   
+  // Close the main object here
+  };
+  
+  // Then export attendanceService separately
+  export const attendanceService = {
+    getAttendance: async (params?: { magasin_id?: string | number; date?: string }) => {
+      try {
+        console.log('=== API: Récupération des présences ===');
+        
+        const queryParams = new URLSearchParams();
+        if (params?.magasin_id) {
+          queryParams.append('magasin_id', params.magasin_id.toString());
+        }
+        if (params?.date) {
+          queryParams.append('date', params.date);
+        }
+        
+        const endpoint = queryParams.toString() 
+          ? `${endpoints.attendance}?${queryParams.toString()}`
+          : endpoints.attendance;
+        
+        console.log('🔍 Endpoint appelé:', endpoint);
+        
+        const response = await apiRequest(endpoint);
+        console.log('✅ Présences reçues:', response);
+        console.log('📊 Nombre d\'éléments:', Array.isArray(response) ? response.length : response?.results?.length || 0);
+        
+        return normalizeApiResponse(response);
+      } catch (error) {
+        console.error('❌ Erreur récupération présences:', error);
+        throw error;
+      }
+    },
+    // ... rest of attendanceService methods
+  // Méthode spécifique pour manager
+  getAttendanceForManager: async (magasin_id: string | number, date?: string) => {
+    try {
+      console.log('=== API: Récupération présences pour manager ===');
+      console.log('🏪 Magasin ID:', magasin_id);
+      console.log('📅 Date:', date);
+      
+      const params = { magasin_id };
+      if (date) {
+        params.date = date;
+      }
+      
+      return await attendanceService.getAttendance(params);
+    } catch (error) {
+      console.error('❌ Erreur récupération présences manager:', error);
+      throw error;
+    }
+  },
+
+  // Méthode alternative si l'API ne supporte pas les paramètres
+  getAllAttendance: async () => {
+    try {
+      console.log('=== API: Récupération TOUTES les présences ===');
+      const response = await apiRequest(endpoints.attendance);
+      console.log('✅ Toutes les présences reçues:', response);
+      return normalizeApiResponse(response);
+    } catch (error) {
+      console.error('❌ Erreur récupération toutes présences:', error);
+      throw error;
+    }
+  },
+     
   createAttendance: async (attendanceData: any) => {
     try {
       console.log('=== API: Création présence ===');
       console.log('Données envoyées:', attendanceData);
-      
+             
       const response = await apiRequest(endpoints.attendance, {
         method: 'POST',
         body: JSON.stringify(attendanceData),
       });
-      
+             
       console.log('✅ Présence créée via API:', response);
       return response;
     } catch (error) {
@@ -537,18 +813,18 @@ export const attendanceService = {
       throw error;
     }
   },
-  
+     
   updateAttendance: async (id: string, attendanceData: any) => {
     try {
       console.log('=== API: Mise à jour présence ===');
       console.log('ID:', id);
       console.log('Données:', attendanceData);
-      
+             
       const response = await apiRequest(`${endpoints.attendance}${id}/`, {
         method: 'PATCH',
         body: JSON.stringify(attendanceData),
       });
-      
+             
       console.log('✅ Présence mise à jour via API:', response);
       return response;
     } catch (error) {
@@ -556,9 +832,14 @@ export const attendanceService = {
       throw error;
     }
   },
-  
-  deleteAttendance: (id: string) =>
-    apiRequest(`${endpoints.attendance}${id}/`, { method: 'DELETE' }),
+  deleteAttendance: async (id: string) => {
+    try {
+      return await apiRequest(`${endpoints.attendance}${id}/`, { method: 'DELETE' });
+    } catch (error) {
+      console.error('Erreur suppression présence:', error);
+      throw error;
+    }
+  },
 };
 
 // Messaging Services
@@ -599,4 +880,55 @@ export const messagingService = {
   
   deleteMessage: (id: string) =>
     apiRequest(`${endpoints.messages}${id}/`, { method: 'DELETE' }),
+};
+
+// Planning Services
+export const planningService = {
+  getPlannings: async (params: Record<string, any> = {}) => {
+    try {
+      const queryParams = new URLSearchParams(params).toString();
+      const endpoint = queryParams ? `${endpoints.plannings}?${queryParams}` : endpoints.plannings;
+      const response = await apiRequest(endpoint);
+      return normalizeApiResponse(response);
+    } catch (error) {
+      console.error('Erreur récupération plannings:', error);
+      throw error;
+    }
+  },
+
+  createPlanning: async (planningData: any) => {
+    try {
+      const response = await apiRequest(endpoints.plannings, {
+        method: 'POST',
+        body: JSON.stringify(planningData),
+        credentials: 'include',
+      });
+      return response;
+    } catch (error) {
+      console.error('Erreur création planning:', error);
+      throw error;
+    }
+  },
+
+  updatePlanning: async (id: string, planningData: any) => {
+    try {
+      const response = await apiRequest(`${endpoints.plannings}${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(planningData),
+      });
+      return response;
+    } catch (error) {
+      console.error('Erreur mise à jour planning:', error);
+      throw error;
+    }
+  },
+
+  deletePlanning: async (id: string) => {
+    try {
+      return await apiRequest(`${endpoints.plannings}${id}/`, { method: 'DELETE' });
+    } catch (error) {
+      console.error('Erreur suppression planning:', error);
+      throw error;
+    }
+  },
 };

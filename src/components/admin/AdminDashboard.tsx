@@ -7,6 +7,9 @@ import { Produit, Stock, Magasin, User } from '../../types';
 import { safeNumber } from '../../utils/numbers';
 
 export const AdminDashboard: React.FC = () => {
+  // Taux de change EUR vers DHS (à mettre à jour selon le taux actuel)
+  const TAUX_EUR_DHS = 10.85;
+
   const [stats, setStats] = useState({
     totalProduits: 0,
     totalMagasins: 0,
@@ -17,6 +20,29 @@ export const AdminDashboard: React.FC = () => {
   const [stockData, setStockData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Fonction pour formater les nombres (100k, 1M, etc.)
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1).replace('.0', '') + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1).replace('.0', '') + 'k';
+    }
+    return num.toString();
+  };
+
+  // Fonction pour convertir EUR en DHS
+  const convertEurToDhs = (montantEur: number): number => {
+    return montantEur;
+  };
+
+  // Fonction pour formater en DHS avec format compact
+  const formatDhs = (montantEur: number): string => {
+    const montantDhs = convertEurToDhs(montantEur);
+    const formatted = formatNumber(montantDhs);
+    return `${formatted} MAD`;
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -176,8 +202,8 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Cartes de statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      {/* Cartes de statistiques - Maintenant alignées sur 4 colonnes comme le manager */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <div className="p-2 bg-blue-100 rounded-lg">
@@ -216,28 +242,13 @@ export const AdminDashboard: React.FC = () => {
 
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <AlertTriangle className="h-6 w-6 text-red-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Alertes Stock</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.alertesStock}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center">
             <div className="p-2 bg-yellow-100 rounded-lg">
               <DollarSign className="h-6 w-6 text-yellow-600" />
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Valeur Stock</p>
               <p className="text-2xl font-bold text-gray-900">
-                {stats.valeurTotaleStock.toLocaleString('fr-FR', {
-                  style: 'currency',
-                  currency: 'EUR'
-                })}
+                {formatDhs(stats.valeurTotaleStock)}
               </p>
             </div>
           </div>
@@ -313,23 +324,6 @@ export const AdminDashboard: React.FC = () => {
           )}
         </div>
       </div>
-
-      {/* Alertes */}
-      {stats.alertesStock > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <div className="flex items-center">
-            <AlertTriangle className="h-6 w-6 text-red-600 mr-3" />
-            <div>
-              <h3 className="text-lg font-medium text-red-800">
-                Attention: {stats.alertesStock} produit{stats.alertesStock > 1 ? 's' : ''} en rupture de stock
-              </h3>
-              <p className="text-red-600 mt-1">
-                Certains produits ont atteint leur seuil d'alerte. Vérifiez la section Produits pour plus de détails.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

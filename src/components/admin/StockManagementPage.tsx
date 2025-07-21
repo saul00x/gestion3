@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Package, AlertTriangle, Eye } from 'lucide-react';
+import { Package, AlertTriangle } from 'lucide-react';
 import { stockService, productsService, storesService } from '../../services/api';
 import { Stock, Produit, Magasin } from '../../types';
 import { safeNumber, formatNumber } from '../../utils/numbers';
@@ -154,11 +154,7 @@ export const StockManagementPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Consultation des Stocks</h1>
-          <p className="text-gray-600 mt-1">Vue d'ensemble des stocks de tous vos magasins (lecture seule)</p>
-        </div>
-        <div className="flex items-center space-x-2 text-blue-600">
-          <Eye className="h-5 w-5" />
-          <span className="text-sm font-medium">Mode lecture seule</span>
+          <p className="text-gray-600 mt-1">Vue d'ensemble des stocks de tous vos magasins</p>
         </div>
       </div>
 
@@ -281,19 +277,6 @@ export const StockManagementPage: React.FC = () => {
           </p>
         </div>
       )}
-
-      {/* Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <div className="flex items-center">
-          <Eye className="h-6 w-6 text-blue-600 mr-3" />
-          <div>
-            <h3 className="text-lg font-medium text-blue-800">Mode consultation</h3>
-            <p className="text-blue-600 mt-1">
-              Vous consultez les stocks en mode lecture seule. La gestion des stocks est déléguée aux managers de chaque magasin.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

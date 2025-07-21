@@ -157,6 +157,7 @@ export const endpoints = {
   
   // Attendance
   attendance: '/attendance/presences/',
+  plannings: '/planning/plannings/',
   
   // Messaging
   messages: '/messaging/messages/',

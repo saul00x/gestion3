@@ -30,7 +30,7 @@ class Mouvement(models.Model):
         ('entrée', 'Entrée'),
         ('sortie', 'Sortie'),
     ]
-    
+
     MOTIF_CHOICES = [
         ('livraison', 'Livraison fournisseur'),
         ('retour', 'Retour client'),
@@ -39,9 +39,16 @@ class Mouvement(models.Model):
         ('vente', 'Vente'),
         ('casse', 'Casse/Perte'),
         ('retour_fournisseur', 'Retour fournisseur'),
-        ('correction', 'Correction d\'inventaire'),
+        ('correction', "Correction d'inventaire"),
     ]
-    
+
+    STATUT_CHOICES = [
+        ('valide', 'Validé automatiquement'),
+        ('attente', 'En attente de validation'),
+        ('rejete', 'Rejeté'),
+        ('accepte', 'Validé par manager'),
+    ]
+
     produit = models.ForeignKey(Produit, on_delete=models.CASCADE)
     magasin = models.ForeignKey(Magasin, on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -49,6 +56,8 @@ class Mouvement(models.Model):
     quantite = models.IntegerField()
     date = models.DateTimeField(auto_now_add=True)
     motif = models.CharField(max_length=50, choices=MOTIF_CHOICES)
+    justificatif = models.FileField(upload_to='justificatifs/', null=True, blank=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='attente')
     
     def __str__(self):
         return f"{self.type} - {self.produit.nom} ({self.quantite})"
@@ -93,6 +102,28 @@ class Commande(models.Model):
         verbose_name = 'Commande'
         verbose_name_plural = 'Commandes'
         ordering = ['-date']
+
+class Notification(models.Model):
+    NOTIF_TYPE_CHOICES = [
+        ('mouvement_attente', 'Mouvement en attente de validation'),
+        ('mouvement_valide', 'Mouvement validé'),
+        ('mouvement_rejete', 'Mouvement rejeté'),
+    ]
+    destinataire = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications_recues')
+    mouvement = models.ForeignKey(Mouvement, on_delete=models.CASCADE, related_name='notifications')
+    type = models.CharField(max_length=30, choices=NOTIF_TYPE_CHOICES)
+    message = models.TextField()
+    date = models.DateTimeField(auto_now_add=True)
+    lu = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Notification pour {self.destinataire.email} - {self.type}"
+
+    class Meta:
+        verbose_name = 'Notification'
+        verbose_name_plural = 'Notifications'
+        ordering = ['-date']
+
 
 class CommandeDetail(models.Model):
     commande = models.ForeignKey(Commande, on_delete=models.CASCADE, related_name='details')

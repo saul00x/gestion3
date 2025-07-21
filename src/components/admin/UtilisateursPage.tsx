@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, Users, Shield, User, Save, X, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Users, Shield, User, Save, X, AlertTriangle, UserCog } from 'lucide-react';
 import { authService, storesService } from '../../services/api';
 import { normalizeApiResponse } from '../../config/api';
 import { User as UserType, Magasin } from '../../types';
@@ -66,13 +66,14 @@ export const UtilisateursPage: React.FC = () => {
     try {
       if (editingUser) {
         // Modification d'un utilisateur existant
+        // Pour les admins, ne pas envoyer de champ magasin
         const updateData: any = {
           nom: formData.nom,
           prenom: formData.prenom,
           role: formData.role,
         };
         
-        if (formData.magasin) {
+        if (formData.role !== 'admin' && formData.magasin) {
           updateData.magasin = formData.magasin;
         }
         
@@ -107,13 +108,14 @@ export const UtilisateursPage: React.FC = () => {
         }
         
         // Préparer les données pour l'envoi
+        // Pour les admins, ne pas envoyer de champ magasin
         const userData = {
           email: formData.email.trim(),
           nom: formData.nom.trim(),
           prenom: formData.prenom.trim(),
           password: formData.password,
           role: formData.role,
-          magasin: formData.magasin || null,
+          ...(formData.role !== 'admin' && { magasin: formData.magasin || null }),
           image: formData.image,
         };
         
@@ -301,13 +303,20 @@ export const UtilisateursPage: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         user.role === 'admin' 
-                          ? 'bg-purple-100 text-purple-800' 
+                          ? 'bg-purple-100 text-purple-800'
+                          : user.role === 'manager'
+                          ? 'bg-orange-100 text-orange-800'
                           : 'bg-green-100 text-green-800'
                       }`}>
                         {user.role === 'admin' ? (
                           <>
                             <Shield className="h-3 w-3 mr-1" />
                             Administrateur
+                          </>
+                        ) : user.role === 'manager' ? (
+                          <>
+                            <UserCog className="h-3 w-3 mr-1" />
+                            Manager
                           </>
                         ) : (
                           <>
@@ -318,7 +327,11 @@ export const UtilisateursPage: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {magasin ? magasin.nom : (
+                      {user.role === 'admin' ? (
+                        <span className="text-gray-500">-</span>
+                      ) : magasin ? (
+                        magasin.nom
+                      ) : (
                         <span className="text-gray-400 flex items-center">
                           <AlertTriangle className="h-4 w-4 mr-1" />
                           Non assigné
@@ -501,6 +514,7 @@ export const UtilisateursPage: React.FC = () => {
                     </p>
                   </div>
                 )}
+                {/* Pour les admins, aucun magasin ne doit être affiché ni assigné */}
 
                 <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
                   <button

@@ -1,18 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Package, AlertTriangle, Eye, Search } from 'lucide-react';
-import { productsService, suppliersService } from '../../services/api';
-import { normalizeApiResponse } from '../../config/api';
-import { Produit, Fournisseur } from '../../types';
-
-export const ProduitsViewPage: React.FC = () => {
-  const [produits, setProduits] = useState<Produit[]>([]);
-  const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([]);
-  const [loading, setLoading] = useState(true);
+// Cette page a été supprimée à la demande de l'utilisateur. ProduitsViewPage n'est plus utilisée pour l'admin.
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchProduits();
     fetchFournisseurs();
+    fetchMagasins();
   }, []);
 
   const fetchProduits = async () => {
@@ -43,6 +35,19 @@ export const ProduitsViewPage: React.FC = () => {
     }
   };
 
+  const fetchMagasins = async () => {
+    try {
+      const data = await storesService.getStores();
+      const normalizedData = normalizeApiResponse(data);
+      setMagasins(normalizedData.map((item: any) => ({
+        ...item,
+        createdAt: new Date(item.created_at)
+      })));
+    } catch (error) {
+      console.error('Erreur lors du chargement des magasins:', error);
+    }
+  };
+
   const filteredProduits = Array.isArray(produits) ? produits.filter(produit =>
     produit.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
     produit.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -63,11 +68,7 @@ export const ProduitsViewPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Consultation des Produits</h1>
-          <p className="text-gray-600 mt-1">Vue d'ensemble de votre catalogue de produits (lecture seule)</p>
-        </div>
-        <div className="flex items-center space-x-2 text-blue-600">
-          <Eye className="h-5 w-5" />
-          <span className="text-sm font-medium">Mode lecture seule</span>
+          <p className="text-gray-600 mt-1">Vue d'ensemble de tous les produits par magasin</p>
         </div>
       </div>
 
@@ -89,6 +90,7 @@ export const ProduitsViewPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredProduits.map((produit) => {
           const fournisseur = fournisseurs.find(f => f.id === produit.fournisseur_id);
+          const magasin = magasins.find(m => m.id === produit.magasin_id);
           return (
             <div key={produit.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow duration-200">
               {/* Image */}
@@ -112,6 +114,14 @@ export const ProduitsViewPage: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </div>
+              <div className="absolute top-2 right-2 flex space-x-1">
+                <button className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 transition-colors duration-200">
+                  <Edit className="h-4 w-4 text-gray-600" />
+                </button>
+                <button className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 transition-colors duration-200">
+                  <Trash2 className="h-4 w-4 text-red-600" />
+                </button>
               </div>
 
               {/* Content */}
@@ -146,6 +156,13 @@ export const ProduitsViewPage: React.FC = () => {
                       <span className="text-sm font-medium text-gray-900">{fournisseur.nom}</span>
                     </div>
                   )}
+                  
+                  {magasin && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Magasin:</span>
+                      <span className="text-sm font-medium text-blue-600">{magasin.nom}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -162,19 +179,6 @@ export const ProduitsViewPage: React.FC = () => {
           </p>
         </div>
       )}
-
-      {/* Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <div className="flex items-center">
-          <Eye className="h-6 w-6 text-blue-600 mr-3" />
-          <div>
-            <h3 className="text-lg font-medium text-blue-800">Mode consultation</h3>
-            <p className="text-blue-600 mt-1">
-              Vous consultez les produits en mode lecture seule. La gestion des produits est déléguée aux managers de chaque magasin.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

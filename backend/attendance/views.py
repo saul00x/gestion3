@@ -2,6 +2,8 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+
+
 from django.db import transaction
 from django.utils import timezone
 from datetime import date, datetime
@@ -22,9 +24,11 @@ class PresenceListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         if user.role == 'admin':
             return Presence.objects.select_related('user', 'magasin').all()
+        elif user.role == 'manager':
+            # Voir toutes les présences des employés de son magasin
+            return Presence.objects.select_related('user', 'magasin').filter(magasin=user.magasin_id)
         else:
             return Presence.objects.select_related('user', 'magasin').filter(user=user)
-    
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         try:
@@ -113,6 +117,16 @@ class PresenceListCreateView(generics.ListCreateAPIView):
         except Exception as e:
             print(f"❌ Erreur création/mise à jour présence: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+
+
+
+
+    
 
 class PresenceDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PresenceSerializer

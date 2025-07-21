@@ -74,11 +74,12 @@ class UserCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         password = validated_data.pop('password')
-        
+        # Forcer magasin=None si admin
+        if validated_data.get('role') == 'admin':
+            validated_data['magasin'] = None
         # Générer le username automatiquement si non fourni
         if not validated_data.get('username'):
             validated_data['username'] = validated_data['email'].split('@')[0]
-        
         user = User.objects.create_user(**validated_data)
         user.set_password(password)
         user.save()

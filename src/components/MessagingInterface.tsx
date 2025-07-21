@@ -30,25 +30,28 @@ export const MessagingInterface: React.FC = () => {
       const usersData = await authService.getUsers();
       let filteredUsers: User[] = [];
 
-      if (user?.role === 'manager') {
-        // Manager peut parler avec ses employés et les admins
+      if (user?.role === 'admin') {
+        // Admin peut parler avec tout le monde
         filteredUsers = usersData
-          .filter((u: any) => 
-            (u.role === 'employe' && u.magasin_id === user.magasin_id) ||
-            u.role === 'admin'
-          )
+          .filter((u: any) => u.role === 'employe' || u.role === 'manager')
+          .filter((u: any) => u.id !== user.id)
+          .map((item: any) => ({
+            ...item,
+            createdAt: new Date(item.date_joined)
+          }));
+      } else if (user?.role === 'manager') {
+        // Manager peut parler avec les employés de son magasin seulement
+        filteredUsers = usersData
+          .filter((u: any) => u.role === 'employe' && u.magasin_id === user.magasin_id)
           .filter((u: any) => u.id !== user.id)
           .map((item: any) => ({
             ...item,
             createdAt: new Date(item.date_joined)
           }));
       } else if (user?.role === 'employe') {
-        // Employé peut parler avec les admins et son manager
+        // Employé peut parler avec son manager seulement
         filteredUsers = usersData
-          .filter((u: any) => 
-            u.role === 'admin' ||
-            (u.role === 'manager' && u.magasin_id === user.magasin_id)
-          )
+          .filter((u: any) => u.role === 'manager' && u.magasin_id === user.magasin_id)
           .filter((u: any) => u.id !== user.id)
           .map((item: any) => ({
             ...item,

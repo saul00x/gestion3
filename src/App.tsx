@@ -50,7 +50,6 @@ function App() {
                     <Route path="dashboard" element={<AdminDashboard />} />
                     <Route path="magasins" element={<MagasinsPage />} />
                     <Route path="utilisateurs" element={<UtilisateursPage />} />
-                    <Route path="produits" element={<ProduitsViewPage />} />
                     <Route path="stocks" element={<StockManagementPage />} />
                     <Route path="presences" element={<PresencesPage />} />
                     <Route path="parametres" element={<ParametresPage />} />
@@ -101,10 +100,12 @@ function App() {
               user ? (
                 user.role === 'admin' ? (
                   <Navigate to="/admin/dashboard" replace />
-                ) : user.role === 'manager' ? (
-                  <Navigate to="/manager/dashboard" replace />
                 ) : (
-                  <Navigate to="/employe/dashboard" replace />
+                  user.role === 'manager' ? (
+                    <Navigate to="/manager/dashboard" replace />
+                  ) : (
+                    <Navigate to="/employe/dashboard" replace />
+                  )
                 )
               ) : (
                 <Navigate to="/login" replace />

@@ -12,6 +12,7 @@ export const PresencesPage: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showAll, setShowAll] = useState(false);
   const [selectedUser, setSelectedUser] = useState('');
 
   // NOUVELLE FONCTION : Recherche d'utilisateur améliorée
@@ -49,7 +50,7 @@ export const PresencesPage: React.FC = () => {
 
   useEffect(() => {
     fetchPresences();
-  }, [selectedDate, selectedUser]);
+  }, [selectedDate, selectedUser, showAll]);
 
   const fetchData = async () => {
     try {
@@ -86,8 +87,8 @@ export const PresencesPage: React.FC = () => {
         pause_sortie: item.pause_sortie ? new Date(item.pause_sortie) : null
       })) as Presence[];
 
-      // Filtrer par date
-      if (selectedDate) {
+      // Filtrer par date (sauf si showAll)
+      if (selectedDate && !showAll) {
         const filterDate = new Date(selectedDate);
         presencesData = presencesData.filter(presence => {
           const presenceDate = presence.date_pointage;
@@ -569,6 +570,25 @@ export const PresencesPage: React.FC = () => {
               Aucun pointage ne correspond aux filtres sélectionnés.
             </p>
           </div>
+        )}
+      </div>
+
+      {/* Bouton afficher tout l'historique */}
+      <div className="flex justify-end mb-4">
+        {showAll ? (
+          <button
+            className="px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+            onClick={() => { setShowAll(false); setSelectedDate(new Date().toISOString().split('T')[0]); }}
+          >
+            Afficher uniquement la date sélectionnée
+          </button>
+        ) : (
+          <button
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            onClick={() => { setShowAll(true); setSelectedDate(''); }}
+          >
+            Afficher tout l'historique
+          </button>
         )}
       </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Calendar, Clock, User, Save, X } from 'lucide-react';
-import { authService } from '../../services/api';
+import { authService, planningService } from '../../services/api';
 import { normalizeApiResponse } from '../../config/api';
 import { useAuth } from '../../hooks/useAuth';
 import { User as UserType } from '../../types';
@@ -71,11 +71,11 @@ export const PlanningPage: React.FC = () => {
         return;
       }
       
-      // Filtrer les employés du magasin du manager
+      // Filtrer les employés du magasin du manager ET magasin_id non nul
       const employesDuMagasin = normalizedData
         .filter((u: any) => {
           console.log('Vérification utilisateur:', u.role, u.magasin_id, 'vs', user.magasin_id);
-          return u.role === 'employe' && u.magasin_id === user.magasin_id;
+          return u.role === 'employe' && u.magasin_id === user.magasin_id && u.magasin_id !== null;
         })
         .map((item: any) => ({
           ...item,
@@ -92,68 +92,66 @@ export const PlanningPage: React.FC = () => {
   };
 
   const fetchPlannings = async () => {
+    if (!users.length) return;
+    setLoading(true);
     try {
-      console.log('Chargement des plannings pour la semaine:', selectedWeek);
-      
-      // Créer des plannings de démonstration basés sur les vrais utilisateurs
-      const mockPlannings: Planning[] = users.length > 0 ? [
-        {
-          id: '1',
-          user_id: users[0].id,
-          date: new Date(selectedWeek),
-          heure_debut: '09:00',
-          heure_fin: '17:00',
-          tache: 'Gestion du stock',
-          notes: 'Inventaire des produits'
-        },
-        // Ajouter plus de plannings si il y a plus d'utilisateurs
-        ...(users.length > 1 ? [{
-          id: '2',
-          user_id: users[1].id,
-          date: new Date(new Date(selectedWeek).getTime() + 24 * 60 * 60 * 1000), // Jour suivant
-          heure_debut: '08:00',
-          heure_fin: '16:00',
-          tache: 'Accueil client',
-          notes: 'Service client'
-        }] : [])
-      ] : [];
-      
-      console.log('Plannings créés:', mockPlannings);
-      setPlannings(mockPlannings);
+      const weekStart = new Date(selectedWeek);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const userIds = users.map(u => u.id);
+      // Charger tous les plannings des employés du magasin pour la semaine
+      const params = {
+        date__gte: weekStart.toISOString().split('T')[0],
+        date__lte: weekEnd.toISOString().split('T')[0],
+      };
+      // Charger pour tous les employés (filtrage côté backend)
+      const allPlannings = await planningService.getPlannings(params);
+      // Ne garder que ceux des employés de ce magasin
+      const filtered = allPlannings.filter((p: any) => userIds.includes(p.user));
+      // Convertir date string -> Date
+      setPlannings(filtered.map((p: any) => ({ ...p, date: new Date(p.date), user_id: p.user })));
     } catch (error) {
       console.error('Erreur lors du chargement des plannings:', error);
       toast.error('Erreur lors du chargement des plannings');
+      setPlannings([]);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      const planningData: Planning = {
-        id: editingPlanning?.id || Date.now().toString(),
-        user_id: formData.user_id,
-        date: new Date(formData.date),
+      // Préparer les données pour l’API
+      const planningData = {
+        user: formData.user_id,
+        magasin: user?.magasin_id, // Ajout du magasin du manager
+        date: formData.date,
         heure_debut: formData.heure_debut,
         heure_fin: formData.heure_fin,
         tache: formData.tache,
-        notes: formData.notes
+        notes: formData.notes,
       };
-
       if (editingPlanning) {
-        // Mise à jour
-        setPlannings(prev => prev.map(p => p.id === editingPlanning.id ? planningData : p));
+        await planningService.updatePlanning(editingPlanning.id, planningData);
         toast.success('Planning modifié avec succès');
       } else {
-        // Création
-        setPlannings(prev => [...prev, planningData]);
+        console.log('Payload envoyé pour création planning:', planningData);
+        // Vérification debug :
+        if (!planningData.magasin) {
+          console.error('❌ Aucun magasin_id fourni dans le payload !');
+        }
+        await planningService.createPlanning(planningData);
         toast.success('Planning ajouté avec succès');
       }
-
+      setShowModal(false);
+      setEditingPlanning(null);
       resetForm();
+      await fetchPlannings();
     } catch (error) {
-      toast.error('Erreur lors de la sauvegarde');
+      console.error('Erreur lors de la sauvegarde du planning:', error);
+      toast.error('Erreur lors de la sauvegarde du planning');
     } finally {
       setLoading(false);
     }
@@ -173,13 +171,16 @@ export const PlanningPage: React.FC = () => {
   };
 
   const handleDelete = async (planning: Planning) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce planning ?')) return;
-
+    setLoading(true);
     try {
-      setPlannings(prev => prev.filter(p => p.id !== planning.id));
-      toast.success('Planning supprimé avec succès');
+      await planningService.deletePlanning(planning.id);
+      toast.success('Planning supprimé');
+      await fetchPlannings();
     } catch (error) {
-      toast.error('Erreur lors de la suppression');
+      console.error('Erreur lors de la suppression du planning:', error);
+      toast.error('Erreur lors de la suppression du planning');
+    } finally {
+      setLoading(false);
     }
   };
 

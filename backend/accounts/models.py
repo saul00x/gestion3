@@ -3,6 +3,7 @@ from django.contrib.auth.models import UserManager as BaseUserManager
 from django.db import models
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
+from django.core.exceptions import ValidationError
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -63,6 +64,36 @@ class User(AbstractUser):
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['nom', 'prenom']
     
+    def clean(self):
+        """Validation personnalisée"""
+        super().clean()
+        
+        # Les administrateurs ne doivent pas avoir de magasin
+        if self.role == 'admin' and self.magasin:
+            raise ValidationError({
+                'magasin': 'Un administrateur ne peut pas être assigné à un magasin.'
+            })
+        
+        # Les managers doivent avoir un magasin
+        if self.role == 'manager' and not self.magasin:
+            raise ValidationError({
+                'magasin': 'Un manager doit être assigné à un magasin.'
+            })
+    
+    def save(self, *args, **kwargs):
+        # Générer un username basé sur l'email si vide
+        if not self.username:
+            self.username = self.email.split('@')[0]
+        
+        # Forcer magasin à None pour les admins
+        if self.role == 'admin':
+            self.magasin = None
+        
+        # Validation avant sauvegarde
+        self.full_clean()
+        
+        super().save(*args, **kwargs)
+    
     def __str__(self):
         return f"{self.prenom} {self.nom} ({self.email})"
     
@@ -71,12 +102,6 @@ class User(AbstractUser):
         if self.image:
             return self.image.url
         return None
-    
-    def save(self, *args, **kwargs):
-        # Générer un username basé sur l'email si vide
-        if not self.username:
-            self.username = self.email.split('@')[0]
-        super().save(*args, **kwargs)
 
 @receiver(post_delete, sender=User)
 def delete_user_presences(sender, instance, **kwargs):
